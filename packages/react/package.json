@@ -1,0 +1,20 @@
+{
+  "name": "@caret/react",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@caret/dom": "file:../dom",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
