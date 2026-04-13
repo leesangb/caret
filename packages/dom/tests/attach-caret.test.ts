@@ -82,7 +82,7 @@ describe('attachCaret', () => {
     root.remove()
   })
 
-  it('preserves backward selection direction through DOM and controller sync', () => {
+  it('preserves backward selection direction through the fallback DOM sync path', () => {
     installMeasureMock()
 
     const root = document.createElement('div')
@@ -102,25 +102,36 @@ describe('attachCaret', () => {
       throw new Error('Expected document selection')
     }
 
-    if (typeof selection.setBaseAndExtent === 'function') {
-      selection.setBaseAndExtent(text, 5, text, 0)
-    } else if (typeof selection.collapse === 'function' && typeof selection.extend === 'function') {
-      selection.collapse(text, 5)
-      selection.extend(text, 0)
-    } else {
-      caret.unmount()
-      root.remove()
-      return
-    }
+    const originalSetBaseAndExtent = (selection as Selection & { setBaseAndExtent?: unknown }).setBaseAndExtent
+    try {
+      Object.defineProperty(selection, 'setBaseAndExtent', {
+        configurable: true,
+        value: undefined
+      })
 
-    const syncedFromDom = caret.setSelectionFromDOM()
-    expect(syncedFromDom?.anchor.offset).toBe(5)
-    expect(syncedFromDom?.focus.offset).toBe(0)
+      if (typeof selection.collapse === 'function' && typeof selection.extend === 'function') {
+        selection.collapse(text, 5)
+        selection.extend(text, 0)
+      } else {
+        caret.unmount()
+        root.remove()
+        return
+      }
 
-    if (syncedFromDom !== null) {
-      caret.setSelection(syncedFromDom)
-      expect(selection.anchorOffset).toBe(5)
-      expect(selection.focusOffset).toBe(0)
+      const syncedFromDom = caret.setSelectionFromDOM()
+      expect(syncedFromDom?.anchor.offset).toBe(5)
+      expect(syncedFromDom?.focus.offset).toBe(0)
+
+      if (syncedFromDom !== null) {
+        caret.setSelection(syncedFromDom)
+        expect(selection.anchorOffset).toBe(5)
+        expect(selection.focusOffset).toBe(0)
+      }
+    } finally {
+      Object.defineProperty(selection, 'setBaseAndExtent', {
+        configurable: true,
+        value: originalSetBaseAndExtent
+      })
     }
 
     caret.unmount()

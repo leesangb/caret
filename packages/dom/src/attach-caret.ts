@@ -190,8 +190,8 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
     }
 
     if (typeof domSelection.collapse === 'function' && typeof domSelection.extend === 'function') {
-      domSelection.collapse(focusNode, focusOffset)
-      domSelection.extend(anchorNode, anchorOffset)
+      domSelection.collapse(anchorNode, anchorOffset)
+      domSelection.extend(focusNode, focusOffset)
       return
     }
 
