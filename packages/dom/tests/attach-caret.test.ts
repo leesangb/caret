@@ -109,30 +109,59 @@ describe('attachCaret', () => {
         value: undefined
       })
 
-      if (typeof selection.collapse === 'function' && typeof selection.extend === 'function') {
-        selection.collapse(text, 5)
-        selection.extend(text, 0)
-      } else {
+      if (typeof selection.collapse !== 'function' || typeof selection.extend !== 'function') {
         caret.unmount()
         root.remove()
         return
       }
 
-      const syncedFromDom = caret.setSelectionFromDOM()
-      expect(syncedFromDom?.anchor.offset).toBe(5)
-      expect(syncedFromDom?.focus.offset).toBe(0)
-
-      if (syncedFromDom !== null) {
-        caret.setSelection(syncedFromDom)
-        expect(selection.anchorOffset).toBe(5)
-        expect(selection.focusOffset).toBe(0)
+      selection.collapse(text, 0)
+      selection.extend(text, 5)
+      const forward = caret.setSelectionFromDOM()
+      if (forward === null) {
+        throw new Error('Expected forward selection')
       }
+
+      const backward = {
+        anchor: forward.focus,
+        focus: forward.anchor
+      }
+
+      caret.setSelection(backward)
+
+      expect(caret.getSelection()).toEqual(backward)
+      expect(selection.anchorOffset).toBe(5)
+      expect(selection.focusOffset).toBe(0)
     } finally {
       Object.defineProperty(selection, 'setBaseAndExtent', {
         configurable: true,
         value: originalSetBaseAndExtent
       })
     }
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('keeps overlay content out of post-mount refresh snapshots', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    const overlay = root.querySelector('[data-caret-overlay="true"]')
+    if (!(overlay instanceof HTMLElement)) {
+      throw new Error('Expected overlay root to be mounted')
+    }
+
+    overlay.appendChild(document.createTextNode('overlay noise'))
+    caret.refresh()
+
+    expect(caret.hitTest({ x: 5, y: 30 })).toBeNull()
 
     caret.unmount()
     root.remove()

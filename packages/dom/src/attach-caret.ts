@@ -113,6 +113,24 @@ function selectionFromDocument(root: HTMLElement, model = createDocumentModel(ro
   }
 }
 
+function readModelWithoutOverlay(root: HTMLElement, overlayRoot: HTMLElement): DocumentModel {
+  const parent = overlayRoot.parentNode
+  const nextSibling = overlayRoot.nextSibling
+  const wasAttachedToRoot = parent === root
+
+  if (wasAttachedToRoot) {
+    root.removeChild(overlayRoot)
+  }
+
+  try {
+    return createDocumentModel(root)
+  } finally {
+    if (wasAttachedToRoot) {
+      root.insertBefore(overlayRoot, nextSibling)
+    }
+  }
+}
+
 export function attachCaret({ root }: AttachCaretOptions): AttachCaretController {
   const overlay = createOverlayRenderer(root)
   const listeners = new Set<SelectionChangeListener>()
@@ -128,7 +146,7 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   const view = root.ownerDocument?.defaultView ?? globalThis.window
 
   const readSnapshot = () => {
-    const model = createDocumentModel(root)
+    const model = readModelWithoutOverlay(root, overlay.root)
     snapshot = {
       model,
       geometry: createSelectionGeometry(model, getGeometryOptions(root))
