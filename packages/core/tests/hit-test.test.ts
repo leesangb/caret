@@ -52,7 +52,7 @@ describe('selection geometry and hit testing', () => {
       font: '16px sans-serif'
     })
 
-    const hit = hitTest(model, boxes, { x: 50, y: 10 })
+    const hit = hitTest(model, boxes, { x: 200, y: 20 })
 
     expect(hit?.offset).toBe(0)
   })
@@ -74,7 +74,7 @@ describe('selection geometry and hit testing', () => {
       .filter((rect) => rect.lineIndex === 0)
       .reduce((max, rect) => Math.max(max, rect.caretOffset), 0)
 
-    const hit = hitTest(model, boxes, { x: 59, y: 10 })
+    const hit = hitTest(model, boxes, { x: 60, y: 10 })
 
     expect(hit?.offset).toBe(lineEndZone)
   })
