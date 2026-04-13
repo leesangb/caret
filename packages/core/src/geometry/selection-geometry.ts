@@ -25,6 +25,7 @@ export interface SelectionGeometryRect {
 
 export interface SelectionGeometryBlock {
   blockIndex: number
+  originY: number
   rects: SelectionGeometryRect[]
 }
 
@@ -62,6 +63,24 @@ function getMeasureContext(
   const context = createMeasureContext(font)
   cache.set(font, context)
   return context
+}
+
+function measureFontBox(context: CanvasRenderingContext2D | null) {
+  if (context === null) {
+    return {
+      ascent: 0,
+      descent: 0
+    }
+  }
+
+  const metrics = context.measureText('Ay')
+  const ascent = metrics.actualBoundingBoxAscent
+  const descent = metrics.actualBoundingBoxDescent
+
+  return {
+    ascent: ascent > 0 ? ascent : 0,
+    descent: descent > 0 ? descent : 0
+  }
 }
 
 function measureUnitWidth(
@@ -217,8 +236,8 @@ function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: Layout
 
 function buildLineRectsFromBoundaries(
   block: NormalizedBlock,
-  lineTop: number,
-  lineHeight: number,
+  rectTop: number,
+  rectHeight: number,
   lineIndex: number,
   lineWidth: number,
   boundaries: Array<{
@@ -230,9 +249,9 @@ function buildLineRectsFromBoundaries(
     return [
       {
         x: 0,
-        y: lineTop,
+        y: rectTop,
         width: lineWidth,
-        height: lineHeight,
+        height: rectHeight,
         caretX: 0,
         position: resolveCaretPosition(block, 0),
         lineIndex,
@@ -249,9 +268,9 @@ function buildLineRectsFromBoundaries(
 
     return {
       x: left,
-      y: lineTop,
+      y: rectTop,
       width: Math.max(0, right - left),
-      height: lineHeight,
+      height: rectHeight,
       caretX: boundary.caretX,
       position: resolveCaretPosition(block, boundary.caretOffset),
       lineIndex,
@@ -295,7 +314,8 @@ function buildRichInlineRects(
         run,
         font,
         leadingTrim: trimmed.leadingTrim,
-        prepared: prepareWithSegments(trimmed.trimmedText, font)
+        prepared: prepareWithSegments(trimmed.trimmedText, font),
+        metrics: measureFontBox(getMeasureContext(contextCache, font))
       }
     })
 
@@ -314,6 +334,8 @@ function buildRichInlineRects(
     const boundaries: Array<{ caretX: number; caretOffset: number }> = []
     let x = 0
     let lineHeightForLine = block.lineHeight ?? options.lineHeight
+    let lineAscent = 0
+    let lineDescent = 0
 
     for (const fragment of line.fragments) {
       const preparedRun = runPrepared[fragment.itemIndex]
@@ -325,6 +347,8 @@ function buildRichInlineRects(
         lineHeightForLine,
         preparedRun.run.lineHeight ?? block.lineHeight ?? options.lineHeight
       )
+      lineAscent = Math.max(lineAscent, preparedRun.metrics.ascent)
+      lineDescent = Math.max(lineDescent, preparedRun.metrics.descent)
 
       x += fragment.gapBefore
       const units = Array.from(fragment.text)
@@ -357,8 +381,12 @@ function buildRichInlineRects(
     rects.push(
       ...buildLineRectsFromBoundaries(
         block,
-        lineTop,
-        lineHeightForLine,
+        lineAscent + lineDescent > 0
+          ? lineTop + Math.max(0, (lineHeightForLine - (lineAscent + lineDescent)) / 2)
+          : lineTop,
+        lineAscent + lineDescent > 0
+          ? Math.max(1, lineAscent + lineDescent)
+          : lineHeightForLine,
         lineIndex,
         line.width,
         boundaries
@@ -404,6 +432,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
       const rich = buildRichInlineRects(block, blockTop, options, fallbackWidth, contextCache)
       blocks.push({
         blockIndex,
+        originY: blockTop,
         rects: rich.rects
       })
       blockTop += rich.totalHeight
@@ -417,6 +446,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
     if (layout.lineCount === 0) {
       blocks.push({
         blockIndex,
+        originY: blockTop,
         rects: [
           {
             x: 0,
@@ -458,6 +488,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
 
     blocks.push({
       blockIndex,
+      originY: blockTop,
       rects
     })
 
