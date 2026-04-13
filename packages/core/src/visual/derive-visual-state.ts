@@ -122,6 +122,13 @@ function findBoundary(
   return rects.find((rect) => rect.caretOffset === absoluteOffset) ?? null
 }
 
+function findBoundaryIndex(
+  rects: SelectionGeometryRect[],
+  boundary: SelectionGeometryRect,
+) {
+  return rects.findIndex((rect) => rect === boundary)
+}
+
 function findBoundaryAtOrBefore(
   rects: SelectionGeometryRect[],
   absoluteOffset: number,
@@ -308,6 +315,20 @@ export function deriveVisualState(
   const normalizedEndOffset = normalizeResolvedOffset(geometry, endOffset, 'forward')
 
   const selectionRects: OverlayRect[] = []
+  const pushMergedSelectionRect = (nextRect: OverlayRect) => {
+    const previous = selectionRects[selectionRects.length - 1]
+    if (
+      previous !== undefined &&
+      previous.y === nextRect.y &&
+      previous.height === nextRect.height &&
+      Math.abs((previous.x + previous.width) - nextRect.x) < 0.001
+    ) {
+      previous.width += nextRect.width
+      return
+    }
+
+    selectionRects.push(nextRect)
+  }
 
   for (const line of lineRects) {
     const rects = line.rects
@@ -349,18 +370,32 @@ export function deriveVisualState(
     if (startBoundary === null || endBoundary === null) {
       continue
     }
+    const startIndex = findBoundaryIndex(rects, startBoundary)
+    const endIndex = findBoundaryIndex(rects, endBoundary)
 
-    const width = endBoundary.caretX - startBoundary.caretX
-    if (width <= 0) {
+    if (startIndex < 0 || endIndex < 0 || startIndex >= endIndex) {
       continue
     }
 
-    selectionRects.push({
-      x: startBoundary.caretX,
-      y: first.y,
-      width,
-      height: first.height
-    })
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const current = rects[index]
+      const next = rects[index + 1]
+      if (current === undefined || next === undefined) {
+        continue
+      }
+
+      const width = next.caretX - current.caretX
+      if (width <= 0) {
+        continue
+      }
+
+      pushMergedSelectionRect({
+        x: current.caretX,
+        y: current.y,
+        width,
+        height: current.height
+      })
+    }
   }
 
   return {

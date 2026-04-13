@@ -36,6 +36,11 @@ export interface GeometryOptions {
   charWidth?: number
 }
 
+interface InlineSpacing {
+  letterSpacing?: number
+  wordSpacing?: number
+}
+
 const EMPTY_CURSOR: LayoutCursor = {
   segmentIndex: 0,
   graphemeIndex: 0
@@ -99,16 +104,38 @@ function measureUnitWidth(
   return fallbackWidth
 }
 
+function getInlineSpacingAdjustment(
+  unit: string,
+  index: number,
+  totalUnits: number,
+  spacing: InlineSpacing
+) {
+  let adjustment = 0
+
+  if ((spacing.letterSpacing ?? 0) !== 0 && index < totalUnits - 1) {
+    adjustment += spacing.letterSpacing ?? 0
+  }
+
+  if ((spacing.wordSpacing ?? 0) !== 0 && /\s/u.test(unit)) {
+    adjustment += spacing.wordSpacing ?? 0
+  }
+
+  return adjustment
+}
+
 function buildBoundaryWidths(
   context: CanvasRenderingContext2D | null,
   units: string[],
   fallbackWidth: number,
+  spacing: InlineSpacing = {},
 ): number[] {
   const boundaries = [0]
   let total = 0
 
-  for (const unit of units) {
+  for (let index = 0; index < units.length; index += 1) {
+    const unit = units[index]!
     total += measureUnitWidth(context, unit, fallbackWidth)
+    total += getInlineSpacingAdjustment(unit, index, units.length, spacing)
     boundaries.push(total)
   }
 
@@ -161,13 +188,14 @@ function buildLineRects(
   lineHeight: number,
   font: string,
   fallbackWidth: number,
+  spacing: InlineSpacing,
   lineIndex: number,
   lineText: string,
   lineStartOffset: number,
 ): SelectionGeometryRect[] {
   const context = createMeasureContext(font)
   const lineUnits = Array.from(lineText)
-  const boundaries = buildBoundaryWidths(context, lineUnits, fallbackWidth)
+  const boundaries = buildBoundaryWidths(context, lineUnits, fallbackWidth, spacing)
   const codeUnitBoundaries = [0]
   let codeUnitTotal = 0
 
@@ -240,22 +268,22 @@ function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: Layout
 
 function buildLineRectsFromBoundaries(
   block: NormalizedBlock,
-  rectTop: number,
-  rectHeight: number,
   lineIndex: number,
   lineWidth: number,
   boundaries: Array<{
     caretX: number
     caretOffset: number
+    rectTop: number
+    rectHeight: number
   }>
 ): SelectionGeometryRect[] {
   if (boundaries.length === 0) {
     return [
       {
         x: 0,
-        y: rectTop,
+        y: 0,
         width: lineWidth,
-        height: rectHeight,
+        height: 0,
         caretX: 0,
         position: resolveCaretPosition(block, 0),
         lineIndex,
@@ -272,9 +300,9 @@ function buildLineRectsFromBoundaries(
 
     return {
       x: left,
-      y: rectTop,
+      y: boundary.rectTop,
       width: Math.max(0, right - left),
-      height: rectHeight,
+      height: boundary.rectHeight,
       caretX: boundary.caretX,
       position: resolveCaretPosition(block, boundary.caretOffset),
       lineIndex,
@@ -284,13 +312,20 @@ function buildLineRectsFromBoundaries(
 }
 
 function shouldUseRichInline(block: NormalizedBlock, fallbackFont: string) {
-  const fonts = new Set(
-    block.runs
-      .filter((run) => !run.placeholder && run.text.length > 0)
-      .map((run) => run.font ?? fallbackFont)
-  )
+  const runs = block.runs.filter((run) => !run.placeholder && run.text.length > 0)
+  if (runs.length === 0) {
+    return false
+  }
 
-  return fonts.size > 1
+  const blockFont = block.font ?? fallbackFont
+  const blockLetterSpacing = block.letterSpacing ?? 0
+  const blockWordSpacing = block.wordSpacing ?? 0
+
+  return runs.some((run) => (
+    (run.font ?? blockFont) !== blockFont ||
+    (run.letterSpacing ?? blockLetterSpacing) !== blockLetterSpacing ||
+    (run.wordSpacing ?? blockWordSpacing) !== blockWordSpacing
+  ))
 }
 
 function buildRichInlineRects(
@@ -318,6 +353,8 @@ function buildRichInlineRects(
         run,
         font,
         leadingTrim: trimmed.leadingTrim,
+        letterSpacing: run.letterSpacing ?? block.letterSpacing,
+        wordSpacing: run.wordSpacing ?? block.wordSpacing,
         prepared: prepareWithSegments(trimmed.trimmedText, font),
         metrics: measureFontBox(getMeasureContext(contextCache, font))
       }
@@ -335,7 +372,12 @@ function buildRichInlineRects(
     }
 
     const line = materializeRichInlineLineRange(flow, range)
-    const boundaries: Array<{ caretX: number; caretOffset: number }> = []
+    const boundaries: Array<{
+      caretX: number
+      caretOffset: number
+      rectTop: number
+      rectHeight: number
+    }> = []
     let x = 0
     let lineHeightForLine = block.lineHeight ?? options.lineHeight
     let lineAscent = 0
@@ -353,13 +395,22 @@ function buildRichInlineRects(
       )
       lineAscent = Math.max(lineAscent, preparedRun.metrics.ascent)
       lineDescent = Math.max(lineDescent, preparedRun.metrics.descent)
+      const fragmentHeight = preparedRun.metrics.ascent + preparedRun.metrics.descent > 0
+        ? Math.max(1, preparedRun.metrics.ascent + preparedRun.metrics.descent)
+        : lineHeightForLine
+      const fragmentTop = preparedRun.metrics.ascent + preparedRun.metrics.descent > 0
+        ? lineTop + Math.max(0, (lineHeightForLine - fragmentHeight) / 2)
+        : lineTop
 
-      x += fragment.gapBefore
       const units = Array.from(fragment.text)
       const boundariesInFragment = buildBoundaryWidths(
         getMeasureContext(contextCache, preparedRun.font),
         units,
-        fallbackWidth
+        fallbackWidth,
+        {
+          letterSpacing: preparedRun.letterSpacing,
+          wordSpacing: preparedRun.wordSpacing
+        }
       )
       const codeUnitBoundaries = [0]
       let codeUnitTotal = 0
@@ -371,28 +422,50 @@ function buildRichInlineRects(
 
       const fragmentStart = getCursorCodeUnitOffset(preparedRun.prepared, fragment.start)
       const absoluteStart = preparedRun.run.start + preparedRun.leadingTrim + fragmentStart
+      const hasLeadingCollapsedGap =
+        fragmentStart === 0 &&
+        preparedRun.leadingTrim > 0 &&
+        fragment.gapBefore > 0
 
-      for (let caretIndex = 0; caretIndex < boundariesInFragment.length; caretIndex += 1) {
+      if (hasLeadingCollapsedGap) {
         boundaries.push({
-          caretX: x + boundariesInFragment[caretIndex]!,
-          caretOffset: absoluteStart + codeUnitBoundaries[caretIndex]!
+          caretX: x,
+          caretOffset: preparedRun.run.start,
+          rectTop: fragmentTop,
+          rectHeight: fragmentHeight
         })
       }
 
-      x += fragment.occupiedWidth
+      x += fragment.gapBefore
+
+      if (hasLeadingCollapsedGap) {
+        boundaries.push({
+          caretX: x,
+          caretOffset: absoluteStart,
+          rectTop: fragmentTop,
+          rectHeight: fragmentHeight
+        })
+      }
+
+      for (let caretIndex = hasLeadingCollapsedGap ? 1 : 0; caretIndex < boundariesInFragment.length; caretIndex += 1) {
+        boundaries.push({
+          caretX: x + boundariesInFragment[caretIndex]!,
+          caretOffset: absoluteStart + codeUnitBoundaries[caretIndex]!,
+          rectTop: fragmentTop,
+          rectHeight: fragmentHeight
+        })
+      }
+
+      x += boundariesInFragment[boundariesInFragment.length - 1] ?? 0
     }
+
+    const actualLineWidth = boundaries[boundaries.length - 1]?.caretX ?? line.width
 
     rects.push(
       ...buildLineRectsFromBoundaries(
         block,
-        lineAscent + lineDescent > 0
-          ? lineTop + Math.max(0, (lineHeightForLine - (lineAscent + lineDescent)) / 2)
-          : lineTop,
-        lineAscent + lineDescent > 0
-          ? Math.max(1, lineAscent + lineDescent)
-          : lineHeightForLine,
         lineIndex,
-        line.width,
+        actualLineWidth,
         boundaries
       )
     )
@@ -443,8 +516,10 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
       continue
     }
 
-    const prepared = preparedByText.get(block.text) ?? prepareWithSegments(block.text, options.font)
-    preparedByText.set(block.text, prepared)
+    const blockFont = block.font ?? options.font
+    const prepareKey = `${blockFont}\u0000${block.text}`
+    const prepared = preparedByText.get(prepareKey) ?? prepareWithSegments(block.text, blockFont)
+    preparedByText.set(prepareKey, prepared)
     const layout = layoutWithLines(prepared, options.blockWidth, blockLineHeight)
 
     if (layout.lineCount === 0) {
@@ -480,8 +555,12 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
           blockTop,
           options.blockWidth,
           blockLineHeight,
-          options.font,
+          block.font ?? options.font,
           fallbackWidth,
+          {
+            letterSpacing: block.letterSpacing,
+            wordSpacing: block.wordSpacing
+          },
           lineIndex,
           line.text,
           lineStartOffset,

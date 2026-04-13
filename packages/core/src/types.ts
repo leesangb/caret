@@ -28,6 +28,8 @@ export interface NormalizedRun {
   node: Node
   font?: string
   lineHeight?: number
+  letterSpacing?: number
+  wordSpacing?: number
   placeholder?: true
 }
 
@@ -36,7 +38,10 @@ export interface NormalizedBlock {
   text: string
   runs: NormalizedRun[]
   element: HTMLElement
+  font?: string
   lineHeight?: number
+  letterSpacing?: number
+  wordSpacing?: number
 }
 
 export interface DocumentModel {

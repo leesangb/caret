@@ -103,6 +103,21 @@ function getLineHeight(element: HTMLElement) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function getSpacingValue(
+  element: HTMLElement,
+  property: 'letterSpacing' | 'wordSpacing'
+) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const raw = computed?.[property]
+  if (raw === undefined || raw === null || raw === '' || raw === 'normal') {
+    return undefined
+  }
+
+  const parsed = Number.parseFloat(raw)
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : undefined
+}
+
 function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
   const runs: NormalizedRun[] = []
   let start = 0
@@ -119,7 +134,9 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
         end: start + text.length,
         node: textNode,
         font: getCanvasFont(getTextHost(root, textNode)),
-        lineHeight: getLineHeight(getTextHost(root, textNode))
+        lineHeight: getLineHeight(getTextHost(root, textNode)),
+        letterSpacing: getSpacingValue(getTextHost(root, textNode), 'letterSpacing'),
+        wordSpacing: getSpacingValue(getTextHost(root, textNode), 'wordSpacing')
       })
       start += text.length
     }
@@ -148,7 +165,10 @@ export function createDocumentModel(root: HTMLElement): DocumentModel {
       text: runs.map((run) => run.text).join(''),
       runs,
       element: source.element,
-      lineHeight: getLineHeight(source.element)
+      font: getCanvasFont(source.element),
+      lineHeight: getLineHeight(source.element),
+      letterSpacing: getSpacingValue(source.element, 'letterSpacing'),
+      wordSpacing: getSpacingValue(source.element, 'wordSpacing')
     }
   })
 
