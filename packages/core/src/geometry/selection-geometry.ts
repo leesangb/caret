@@ -47,10 +47,9 @@ function measureUnitWidth(
 
 function buildBoundaryWidths(
   context: CanvasRenderingContext2D | null,
-  text: string,
+  units: string[],
   fallbackWidth: number,
 ): number[] {
-  const units = Array.from(text)
   const boundaries = [0]
   let total = 0
 
@@ -113,14 +112,23 @@ function buildLineRects(
   lineStartOffset: number,
 ): SelectionGeometryRect[] {
   const context = createMeasureContext(font)
-  const boundaries = buildBoundaryWidths(context, lineText, fallbackWidth)
-  const caretCount = Math.max(1, lineText.length + 1)
+  const lineUnits = Array.from(lineText)
+  const boundaries = buildBoundaryWidths(context, lineUnits, fallbackWidth)
+  const codeUnitBoundaries = [0]
+  let codeUnitTotal = 0
+
+  for (const unit of lineUnits) {
+    codeUnitTotal += unit.length
+    codeUnitBoundaries.push(codeUnitTotal)
+  }
+
+  const caretCount = Math.max(1, lineUnits.length + 1)
   const rects: SelectionGeometryRect[] = []
 
   for (let caretIndex = 0; caretIndex < caretCount; caretIndex += 1) {
     const left = caretIndex === 0 ? 0 : (boundaries[caretIndex - 1]! + boundaries[caretIndex]!) / 2
     const right =
-      caretIndex === lineText.length
+      caretIndex === lineUnits.length
         ? layoutWidth
         : (boundaries[caretIndex]! + boundaries[caretIndex + 1]!) / 2
 
@@ -129,9 +137,9 @@ function buildLineRects(
       y: blockTop + lineIndex * lineHeight,
       width: Math.max(0, right - left),
       height: lineHeight,
-      position: resolveCaretPosition(block, lineStartOffset + caretIndex),
+      position: resolveCaretPosition(block, lineStartOffset + codeUnitBoundaries[caretIndex]!),
       lineIndex,
-      caretOffset: lineStartOffset + caretIndex
+      caretOffset: lineStartOffset + codeUnitBoundaries[caretIndex]!
     })
   }
 

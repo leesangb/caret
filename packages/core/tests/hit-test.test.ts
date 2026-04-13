@@ -104,4 +104,23 @@ describe('selection geometry and hit testing', () => {
     expect(hitTest(model, wideBoxes, { x: 5, y: 30 })).toBeNull()
     expect(hitTest(model, narrowBoxes, { x: 5, y: 30 })?.offset).toBeGreaterThan(0)
   })
+
+  it('handles non-BMP text without breaking caret geometry', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>A😀B</p>'
+    const model = createDocumentModel(root)
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const hit = hitTest(model, boxes, { x: 22, y: 10 })
+
+    expect(boxes[0].rects.every((rect) => Number.isFinite(rect.x) && Number.isFinite(rect.width))).toBe(true)
+    expect(hit?.offset).toBe(3)
+  })
 })
