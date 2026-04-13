@@ -42,6 +42,7 @@ describe('attachCaret', () => {
     expect(typeof caret.hitTest).toBe('function')
 
     caret.unmount()
+    root.remove()
   })
 
   it('syncs selection from the DOM selection object', () => {
@@ -78,6 +79,122 @@ describe('attachCaret', () => {
     expect(synced?.focus.offset).toBe(5)
 
     caret.unmount()
+    root.remove()
+  })
+
+  it('preserves backward selection direction through DOM and controller sync', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    const text = root.querySelector('p')?.firstChild
+    if (!(text instanceof Text)) {
+      throw new Error('Expected text node inside paragraph')
+    }
+
+    const selection = window.getSelection()
+    if (selection === null) {
+      throw new Error('Expected document selection')
+    }
+
+    if (typeof selection.setBaseAndExtent === 'function') {
+      selection.setBaseAndExtent(text, 5, text, 0)
+    } else if (typeof selection.collapse === 'function' && typeof selection.extend === 'function') {
+      selection.collapse(text, 5)
+      selection.extend(text, 0)
+    } else {
+      caret.unmount()
+      root.remove()
+      return
+    }
+
+    const syncedFromDom = caret.setSelectionFromDOM()
+    expect(syncedFromDom?.anchor.offset).toBe(5)
+    expect(syncedFromDom?.focus.offset).toBe(0)
+
+    if (syncedFromDom !== null) {
+      caret.setSelection(syncedFromDom)
+      expect(selection.anchorOffset).toBe(5)
+      expect(selection.focusOffset).toBe(0)
+    }
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('resyncs selection state after mutation-driven snapshot refresh', async () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello <strong>world</strong></p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    const world = root.querySelector('strong')?.firstChild
+    if (!(world instanceof Text)) {
+      throw new Error('Expected text node inside strong element')
+    }
+
+    const selection = window.getSelection()
+    if (selection === null) {
+      throw new Error('Expected document selection')
+    }
+
+    const range = document.createRange()
+    range.setStart(world, 0)
+    range.setEnd(world, 5)
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    const before = caret.setSelectionFromDOM()
+    if (before === null) {
+      throw new Error('Expected controller selection')
+    }
+
+    const paragraph = root.querySelector('p')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('Expected paragraph element')
+    }
+
+    paragraph.insertBefore(document.createTextNode('lead '), paragraph.firstChild)
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve())
+      })
+    })
+
+    expect(caret.getSelection()).toEqual(caret.fromDOMRange(selection.getRangeAt(0)))
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('forces a relative host when inline position is static', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.style.position = 'static'
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    expect(root.style.position).toBe('relative')
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
+
+    caret.unmount()
+
+    expect(root.style.position).toBe('static')
+    root.remove()
   })
 
   it('batches invalidations with requestAnimationFrame', () => {

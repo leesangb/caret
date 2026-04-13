@@ -37,6 +37,16 @@ interface Snapshot {
   geometry: SelectionGeometryBlock[]
 }
 
+function comparePaths(left: number[], right: number[]): number {
+  for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+    if (left[index] !== right[index]) {
+      return left[index] - right[index]
+    }
+  }
+
+  return left.length - right.length
+}
+
 function comparePositions(left: CaretPosition, right: CaretPosition) {
   if (left.path.length !== right.path.length) {
     return false
@@ -49,6 +59,13 @@ function comparePositions(left: CaretPosition, right: CaretPosition) {
   }
 
   return left.offset === right.offset
+}
+
+function comparePositionOrder(left: CaretPosition, right: CaretPosition): number {
+  const pathComparison = comparePaths(left.path, right.path)
+  if (pathComparison !== 0) return pathComparison
+
+  return left.offset - right.offset
 }
 
 function compareSelections(left: CaretSelection | null, right: CaretSelection | null) {
@@ -72,18 +89,28 @@ function getGeometryOptions(root: HTMLElement) {
   }
 }
 
-function selectionFromDocument(root: HTMLElement): CaretSelection | null {
+function toCaretPosition(model: DocumentModel, node: Node, offset: number): CaretPosition {
+  const range = node.ownerDocument?.createRange() ?? document.createRange()
+  range.setStart(node, offset)
+  range.setEnd(node, offset)
+
+  return fromDOMRange(model, range).anchor
+}
+
+function selectionFromDocument(root: HTMLElement, model = createDocumentModel(root)): CaretSelection | null {
   const selection = root.ownerDocument?.getSelection()
-  if (selection === null || selection.rangeCount === 0) {
+  if (selection === null || selection.anchorNode === null || selection.focusNode === null) {
     return null
   }
 
-  const range = selection.getRangeAt(0)
-  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+  if (!root.contains(selection.anchorNode) || !root.contains(selection.focusNode)) {
     return null
   }
 
-  return fromDOMRange(createDocumentModel(root), range)
+  return {
+    anchor: toCaretPosition(model, selection.anchorNode, selection.anchorOffset),
+    focus: toCaretPosition(model, selection.focusNode, selection.focusOffset)
+  }
 }
 
 export function attachCaret({ root }: AttachCaretOptions): AttachCaretController {
@@ -124,16 +151,58 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   function syncDomSelection(selection: CaretSelection) {
-    const range = toDOMRange(snapshot?.model ?? createDocumentModel(root), selection)
+    const model = snapshot?.model ?? createDocumentModel(root)
     const domSelection = root.ownerDocument?.getSelection()
     if (domSelection === null) return
 
+    const anchorBoundary = toDOMRange(model, {
+      anchor: selection.anchor,
+      focus: selection.anchor
+    })
+    const focusBoundary = toDOMRange(model, {
+      anchor: selection.focus,
+      focus: selection.focus
+    })
+
+    const anchorNode = anchorBoundary.startContainer
+    const anchorOffset = anchorBoundary.startOffset
+    const focusNode = focusBoundary.startContainer
+    const focusOffset = focusBoundary.startOffset
+    const nativeSelection = domSelection as Selection & {
+      setBaseAndExtent?: (
+        anchorNode: Node,
+        anchorOffset: number,
+        focusNode: Node,
+        focusOffset: number
+      ) => void
+    }
+
+    if (typeof nativeSelection.setBaseAndExtent === 'function') {
+      nativeSelection.setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset)
+      return
+    }
+
     domSelection.removeAllRanges()
-    domSelection.addRange(range)
+
+    if (comparePositionOrder(selection.anchor, selection.focus) <= 0) {
+      domSelection.addRange(toDOMRange(model, selection))
+      return
+    }
+
+    if (typeof domSelection.collapse === 'function' && typeof domSelection.extend === 'function') {
+      domSelection.collapse(focusNode, focusOffset)
+      domSelection.extend(anchorNode, anchorOffset)
+      return
+    }
+
+    domSelection.addRange(toDOMRange(model, selection))
   }
 
   function refresh() {
     readSnapshot()
+    if (snapshot !== null) {
+      commitSelection(selectionFromDocument(root, snapshot.model), false)
+    }
     render()
   }
 
@@ -156,7 +225,7 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   function setSelectionFromDOM() {
-    const nextSelection = selectionFromDocument(root)
+    const nextSelection = selectionFromDocument(root, snapshot?.model ?? createDocumentModel(root))
     commitSelection(nextSelection, false)
     return nextSelection
   }
@@ -167,13 +236,12 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
     mounted = true
 
     const computed = view?.getComputedStyle(root)
-    if (computed?.position === 'static' && root.style.position === '') {
-      restorePositionStyle = true
+    if (computed?.position === 'static') {
+      restorePositionStyle = root.style.position
       root.style.position = 'relative'
     }
 
     refresh()
-    commitSelection(selectionFromDocument(root), false)
 
     const ownerDocument = root.ownerDocument
     if (ownerDocument !== null) {
@@ -207,8 +275,8 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
     selectionListener = null
     overlay.destroy()
 
-    if (restorePositionStyle) {
-      root.style.position = ''
+    if (restorePositionStyle !== false) {
+      root.style.position = restorePositionStyle
     }
 
     mounted = false
