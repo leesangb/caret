@@ -10,6 +10,7 @@
     "build": "npm run build --workspaces --if-present",
     "test": "vitest run --passWithNoTests",
     "test:browser": "playwright test",
+    "capture:readme": "playwright test playground/tests/readme-screenshots.spec.ts",
     "dev": "vite --config playground/vite.config.ts"
   },
   "devDependencies": {

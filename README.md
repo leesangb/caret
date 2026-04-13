@@ -59,6 +59,131 @@ export function Editor() {
 }
 ```
 
+## Examples
+
+### Basic Overlay
+
+![Basic overlay example](assets/readme/basic-example.png)
+
+Default renderer, no extra styling:
+
+```tsx
+import { CaretRoot } from '@caret/react'
+
+export function Editor() {
+  return (
+    <CaretRoot>
+      <div contentEditable suppressContentEditableWarning>
+        <p>Try selecting this text.</p>
+        <p>The default overlay should appear on top of the content.</p>
+      </div>
+    </CaretRoot>
+  )
+}
+```
+
+### CSS Styled Overlay
+
+![Styled overlay example](assets/readme/styled-example.png)
+
+Use the built-in renderer, but style it with classes and CSS variables:
+
+```tsx
+import { CaretRoot } from '@caret/react'
+import { createOverlayRenderer } from '@caret/dom'
+
+export function Editor() {
+  return (
+    <CaretRoot
+      createRenderer={(host) =>
+        createOverlayRenderer(host, {
+          caretWidth: 3,
+          classNames: {
+            root: 'styled-overlay',
+            caret: 'styled-overlay__caret',
+            selection: 'styled-overlay__selection'
+          }
+        })
+      }
+    >
+      <div className="example-editor--styled" contentEditable suppressContentEditableWarning>
+        <p>A thinner caret can feel more editor-like.</p>
+        <p>Use CSS variables to tune color, outline, and radius.</p>
+      </div>
+    </CaretRoot>
+  )
+}
+```
+
+```css
+.example-editor--styled .styled-overlay__caret {
+  --caret-color: #0f172a;
+  --caret-radius: 3px;
+}
+
+.example-editor--styled .styled-overlay__selection {
+  --caret-selection-background: rgba(37, 99, 235, 0.2);
+  --caret-selection-outline: 1px solid rgba(37, 99, 235, 0.4);
+}
+```
+
+### Custom Renderer
+
+![Custom renderer example](assets/readme/custom-renderer-example.png)
+
+Replace the renderer when CSS is not enough:
+
+```tsx
+import { CaretRoot } from '@caret/react'
+import type { OverlayRenderer } from '@caret/dom'
+
+function createMintRenderer(host: HTMLElement): OverlayRenderer {
+  const root = document.createElement('div')
+  root.style.position = 'absolute'
+  root.style.inset = '0'
+  root.style.pointerEvents = 'none'
+
+  return {
+    root,
+    render({ visualState }) {
+      if (!root.parentNode) {
+        host.appendChild(root)
+      }
+
+      root.replaceChildren()
+
+      for (const rect of visualState.selectionRects) {
+        const el = document.createElement('div')
+        el.style.position = 'absolute'
+        el.style.left = `${rect.x}px`
+        el.style.top = `${rect.y}px`
+        el.style.width = `${rect.width}px`
+        el.style.height = `${rect.height}px`
+        el.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(20, 184, 166, 0.28))'
+        el.style.border = '1px solid rgba(15, 118, 110, 0.42)'
+        el.style.borderRadius = '8px'
+        root.appendChild(el)
+      }
+
+      if (visualState.caret) {
+        const el = document.createElement('div')
+        el.style.position = 'absolute'
+        el.style.left = `${visualState.caret.x}px`
+        el.style.top = `${visualState.caret.y}px`
+        el.style.width = '3px'
+        el.style.height = `${visualState.caret.height}px`
+        el.style.background = 'linear-gradient(180deg, #10b981, #0f766e)'
+        el.style.borderRadius = '999px'
+        root.appendChild(el)
+      }
+    },
+    destroy() {
+      root.remove()
+    }
+  }
+}
+```
+
 ## Styling
 
 The default renderer draws two overlay parts:
@@ -135,62 +260,6 @@ export function Editor() {
 }
 ```
 
-## Custom Renderer
-
-If CSS is not enough, provide your own renderer.
-
-```ts
-import { attachCaret, type OverlayRenderer } from '@caret/dom'
-
-function createMyRenderer(host: HTMLElement): OverlayRenderer {
-  const root = document.createElement('div')
-  root.style.position = 'absolute'
-  root.style.inset = '0'
-  root.style.pointerEvents = 'none'
-
-  return {
-    root,
-    render({ visualState }) {
-      if (!root.parentNode) {
-        host.appendChild(root)
-      }
-
-      root.replaceChildren()
-
-      for (const rect of visualState.selectionRects) {
-        const el = document.createElement('div')
-        el.style.position = 'absolute'
-        el.style.left = `${rect.x}px`
-        el.style.top = `${rect.y}px`
-        el.style.width = `${rect.width}px`
-        el.style.height = `${rect.height}px`
-        el.style.background = 'rgba(16, 185, 129, 0.18)'
-        root.appendChild(el)
-      }
-
-      if (visualState.caret) {
-        const el = document.createElement('div')
-        el.style.position = 'absolute'
-        el.style.left = `${visualState.caret.x}px`
-        el.style.top = `${visualState.caret.y}px`
-        el.style.width = '2px'
-        el.style.height = `${visualState.caret.height}px`
-        el.style.background = '#10b981'
-        root.appendChild(el)
-      }
-    },
-    destroy() {
-      root.remove()
-    }
-  }
-}
-
-const caret = attachCaret({
-  root,
-  createRenderer: createMyRenderer
-})
-```
-
 ## Common API
 
 ```ts
@@ -254,3 +323,4 @@ if (!caret.supportState.supported) {
 - Best fit is `contenteditable` with native input behavior still enabled.
 - The library works on one root subtree at a time.
 - The root will be promoted to `position: relative` while mounted if it is `position: static`.
+- Regenerate README screenshots with `npm run capture:readme`.

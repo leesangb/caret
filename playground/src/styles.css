@@ -104,3 +104,82 @@ select {
 .editor-surface p {
   margin: 0 0 1rem;
 }
+
+.examples-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.example-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.example-card__copy {
+  display: grid;
+  gap: 6px;
+}
+
+.example-card__copy h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.example-card__copy p {
+  margin: 0;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.example-editor {
+  position: relative;
+  min-height: 180px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.94)),
+    linear-gradient(135deg, rgba(14, 165, 233, 0.08), transparent 44%);
+  line-height: 1.7;
+  outline: none;
+}
+
+.example-editor p:last-child {
+  margin-bottom: 0;
+}
+
+.example-editor--styled .styled-overlay__caret {
+  --caret-color: #0f172a;
+  --caret-radius: 3px;
+}
+
+.example-editor--styled .styled-overlay__selection {
+  --caret-selection-background: rgba(37, 99, 235, 0.2);
+  --caret-selection-outline: 1px solid rgba(37, 99, 235, 0.4);
+}
+
+.mint-overlay__selection {
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(20, 184, 166, 0.28));
+  border: 1px solid rgba(15, 118, 110, 0.42);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.18);
+}
+
+.mint-overlay__caret {
+  background: linear-gradient(180deg, #10b981, #0f766e);
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(240, 253, 250, 0.9);
+}
+
+@media (min-width: 960px) {
+  .examples-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+  }
+}
