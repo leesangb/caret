@@ -7,47 +7,85 @@ function isBlockElement(node: Element): node is HTMLElement {
   return node instanceof HTMLElement && BLOCK_TAGS.has(node.tagName.toLowerCase())
 }
 
-function collectBlockElements(root: HTMLElement): HTMLElement[] {
-  const blocks = Array.from(root.querySelectorAll('p,div,li,blockquote,pre')).filter(isBlockElement)
-
-  return blocks.length > 0 ? blocks : [root]
+interface BlockSource {
+  element: HTMLElement
+  nodes: Node[]
 }
 
-function collectRuns(block: HTMLElement, root: HTMLElement): NormalizedRun[] {
-  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+function collectBlockSources(root: HTMLElement): BlockSource[] {
+  const sources: BlockSource[] = []
+  let syntheticNodes: Node[] = []
+
+  const flushSynthetic = () => {
+    if (syntheticNodes.length === 0) return
+    sources.push({ element: root, nodes: syntheticNodes })
+    syntheticNodes = []
+  }
+
+  for (const node of Array.from(root.childNodes)) {
+    if (node.nodeType === Node.ELEMENT_NODE && isBlockElement(node as Element)) {
+      flushSynthetic()
+      sources.push({ element: node as HTMLElement, nodes: [node] })
+      continue
+    }
+
+    syntheticNodes.push(node)
+  }
+
+  flushSynthetic()
+
+  return sources.length > 0 ? sources : [{ element: root, nodes: [root] }]
+}
+
+function collectTextNodes(node: Node): Text[] {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return [node as Text]
+  }
+
+  const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
+
+  for (let current = walker.nextNode() as Text | null; current; current = walker.nextNode() as Text | null) {
+    nodes.push(current)
+  }
+
+  return nodes
+}
+
+function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
   const runs: NormalizedRun[] = []
   let start = 0
 
-  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-    if (!node.data) continue
+  for (const node of source.nodes) {
+    for (const textNode of collectTextNodes(node)) {
+      if (!textNode.data) continue
 
-    const text = node.data
-    runs.push({
-      path: toNodePath(node, root),
-      text,
-      start,
-      end: start + text.length,
-      node
-    })
-    start += text.length
+      const text = textNode.data
+      runs.push({
+        path: toNodePath(textNode, root),
+        text,
+        start,
+        end: start + text.length,
+        node: textNode
+      })
+      start += text.length
+    }
   }
 
   return runs
 }
 
 export function createDocumentModel(root: HTMLElement): DocumentModel {
-  const blocks: NormalizedBlock[] = collectBlockElements(root)
-    .map((element) => {
-      const runs = collectRuns(element, root)
+  const blocks: NormalizedBlock[] = collectBlockSources(root).map((source) => {
+    const runs = collectRuns(source, root)
 
-      return {
-        path: toNodePath(element, root),
-        text: runs.map((run) => run.text).join(''),
-        runs,
-        element
-      }
-    })
-    .filter((block) => block.text.length > 0)
+    return {
+      path: toNodePath(source.element, root),
+      text: runs.map((run) => run.text).join(''),
+      runs,
+      element: source.element
+    }
+  })
 
   return { root, blocks }
 }
