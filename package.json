@@ -7,7 +7,7 @@
     "playground"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspace playground",
     "test": "vitest run --passWithNoTests",
     "test:browser": "playwright test",
     "dev": "vite --config playground/vite.config.ts"
