@@ -8,7 +8,7 @@ import {
   type CaretSelection,
   type DocumentModel,
   type SelectionGeometryBlock
-} from '../../core/src/index.ts'
+} from '@caret/core'
 import { createInvalidator } from './observers/create-invalidator'
 import { createOverlayRenderer } from './overlay/create-overlay-renderer'
 

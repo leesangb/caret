@@ -1,4 +1,4 @@
-import type { SelectionGeometryBlock } from '../../../core/src/index.ts'
+import type { SelectionGeometryBlock } from '@caret/core'
 
 export interface OverlayRenderState {
   geometry: SelectionGeometryBlock[]
