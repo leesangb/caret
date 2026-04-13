@@ -7,14 +7,16 @@ describe('createOverlayRenderer', () => {
     document.body.appendChild(host)
 
     const renderer = createOverlayRenderer(host, {
+      caret: {
+        width: 3,
+        color: '#111827',
+        radius: 4
+      },
       classNames: {
         root: 'overlay-root',
         caret: 'caret-part',
         selection: 'selection-part'
       },
-      caretWidth: 3,
-      caretColor: '#111827',
-      caretRadius: 4,
       selection: {
         background: 'rgba(59, 130, 246, 0.22)',
         outline: '1px solid rgba(59, 130, 246, 0.35)',

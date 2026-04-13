@@ -167,6 +167,13 @@ select {
   --caret-selection-outline: 1px solid rgba(37, 99, 235, 0.4);
 }
 
+.example-editor--bubble {
+  border-color: rgba(249, 115, 22, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 235, 0.94), rgba(255, 247, 237, 0.94)),
+    linear-gradient(135deg, rgba(251, 146, 60, 0.08), transparent 44%);
+}
+
 .mint-overlay__selection {
   background:
     linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(20, 184, 166, 0.28));

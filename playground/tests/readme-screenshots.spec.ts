@@ -46,11 +46,13 @@ test('captures README example screenshots', async ({ page }) => {
   const multiline = page.locator('[data-readme-example="multiline"]')
   const styled = page.locator('[data-readme-example="styled"]')
   const custom = page.locator('[data-readme-example="custom"]')
+  const customShape = page.locator('[data-readme-example="custom-shape"]')
 
   await expect(basic).toBeVisible()
   await expect(multiline).toBeVisible()
   await expect(styled).toBeVisible()
   await expect(custom).toBeVisible()
+  await expect(customShape).toBeVisible()
 
   await setParagraphSelection(page, 'basic', 0, 0, 0, 18)
   await expect(basic.locator('[data-caret-overlay-part="selection"]')).toBeVisible()
@@ -67,4 +69,8 @@ test('captures README example screenshots', async ({ page }) => {
   await setParagraphSelection(page, 'custom', 1, 0, 1, 18)
   await expect(custom.locator('[data-caret-custom-part="selection"]')).toBeVisible()
   await custom.screenshot({ path: 'assets/readme/custom-renderer-example.png' })
+
+  await setParagraphSelection(page, 'custom-shape', 0, 5, 1, 26)
+  await expect(customShape.locator('[data-caret-custom-part="selection-shape"]')).toBeVisible()
+  await customShape.screenshot({ path: 'assets/readme/custom-shape-example.png' })
 })

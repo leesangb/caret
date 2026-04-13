@@ -12,9 +12,11 @@ export interface OverlayRenderer {
 }
 
 export interface OverlayRendererOptions {
-  caretWidth?: number
-  caretColor?: string
-  caretRadius?: number | string
+  caret?: {
+    width?: number
+    color?: string
+    radius?: number | string
+  }
   selection?: {
     background?: string
     outline?: string
@@ -75,11 +77,12 @@ export function createOverlayRenderer(
   options: OverlayRendererOptions = {}
 ): OverlayRenderer {
   const root = ensureOverlayRoot(host)
-  const caretWidth = options.caretWidth ?? 2
+  const caretOptions = options.caret ?? {}
+  const caretWidth = caretOptions.width ?? 2
   const selectionOptions = options.selection ?? {}
-  const caretBackground = options.caretColor ?? 'var(--caret-color, rgba(15, 23, 42, 0.9))'
+  const caretBackground = caretOptions.color ?? 'var(--caret-color, rgba(15, 23, 42, 0.9))'
   const caretRadius = formatCssLength(
-    options.caretRadius,
+    caretOptions.radius,
     `var(--caret-radius, ${Math.min(caretWidth / 2, 2)}px)`
   )
   const selectionBackground =

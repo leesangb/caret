@@ -127,9 +127,11 @@ export function Editor() {
     <CaretRoot
       createRenderer={(host) =>
         createOverlayRenderer(host, {
-          caretWidth: 3,
-          caretColor: '#0f172a',
-          caretRadius: 3,
+          caret: {
+            width: 3,
+            color: '#0f172a',
+            radius: 3
+          },
           selection: {
             background: 'rgba(37, 99, 235, 0.2)',
             outline: '1px solid rgba(37, 99, 235, 0.4)',
@@ -160,6 +162,54 @@ export function Editor() {
 ```css
 .styled-overlay {
   filter: saturate(1.05);
+}
+```
+
+### Custom Shape Helper
+
+![Custom shape helper example](assets/readme/custom-shape-example.png)
+
+Use the helper output inside your own SVG renderer when you want something more expressive than plain rectangles:
+
+```tsx
+import { CaretRoot } from '@caret/react'
+import { buildSelectionShapePath, type OverlayRenderer } from '@caret/dom'
+
+function createBubbleRenderer(host: HTMLElement): OverlayRenderer {
+  const root = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+
+  return {
+    root: root as unknown as HTMLElement,
+    render({ visualState }) {
+      if (!root.parentNode) {
+        host.appendChild(root)
+      }
+
+      root.replaceChildren()
+      root.setAttribute('viewBox', `0 0 ${host.clientWidth} ${host.clientHeight}`)
+
+      const shape = buildSelectionShapePath(visualState.selectionRects, {
+        kind: 'pill',
+        paddingX: 6,
+        paddingY: 4
+      })
+
+      if (shape.bounds) {
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+        const tailStartX = shape.bounds.x + Math.min(28, shape.bounds.width * 0.3)
+        const tailBaseY = shape.bounds.y + shape.bounds.height
+        const tail = `M ${tailStartX} ${tailBaseY - 2} L ${tailStartX + 12} ${tailBaseY + 2} L ${tailStartX + 4} ${tailBaseY + 12} Z`
+
+        path.setAttribute('d', `${shape.path} ${tail}`)
+        path.setAttribute('fill', 'rgba(249, 115, 22, 0.18)')
+        path.setAttribute('stroke', 'rgba(194, 65, 12, 0.45)')
+        root.appendChild(path)
+      }
+    },
+    destroy() {
+      root.remove()
+    }
+  }
 }
 ```
 
@@ -237,9 +287,9 @@ It also supports CSS variables:
 
 For most styling, prefer renderer options:
 
-- `caretWidth`
-- `caretColor`
-- `caretRadius`
+- `caret.width`
+- `caret.color`
+- `caret.radius`
 - `selection.background`
 - `selection.outline`
 - `selection.radius`
@@ -261,9 +311,11 @@ const caret = attachCaret({
   root,
   createRenderer(host) {
     return createOverlayRenderer(host, {
-      caretWidth: 3,
-      caretColor: '#111827',
-      caretRadius: 2,
+      caret: {
+        width: 3,
+        color: '#111827',
+        radius: 2
+      },
       selection: {
         background: 'rgba(59, 130, 246, 0.22)',
         outline: '1px solid rgba(59, 130, 246, 0.32)',
@@ -319,7 +371,9 @@ export function Editor() {
     <CaretRoot
       createRenderer={(host) =>
         createOverlayRenderer(host, {
-          caretWidth: 2,
+          caret: {
+            width: 2
+          },
           classNames: {
             root: 'caret-overlay',
             caret: 'caret-overlay__caret',

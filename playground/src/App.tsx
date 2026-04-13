@@ -1,4 +1,4 @@
-import { createOverlayRenderer, type OverlayRenderer } from '@caret/dom'
+import { buildSelectionShapePath, createOverlayRenderer, type OverlayRenderer } from '@caret/dom'
 import { CaretRoot } from '@caret/react'
 import type { ReactNode } from 'react'
 
@@ -13,9 +13,11 @@ interface ExampleCardProps {
 
 function createStyledRenderer(host: HTMLElement) {
   return createOverlayRenderer(host, {
-    caretWidth: 3,
-    caretColor: '#0f172a',
-    caretRadius: 3,
+    caret: {
+      width: 3,
+      color: '#0f172a',
+      radius: 3
+    },
     selection: {
       background: 'rgba(37, 99, 235, 0.2)',
       outline: '1px solid rgba(37, 99, 235, 0.4)',
@@ -74,6 +76,74 @@ function createCustomRenderer(host: HTMLElement): OverlayRenderer {
         caret.style.top = `${visualState.caret.y}px`
         caret.style.width = '3px'
         caret.style.height = `${visualState.caret.height}px`
+        root.appendChild(caret)
+      }
+    },
+    destroy() {
+      root.remove()
+    }
+  }
+}
+
+function createBubbleRenderer(host: HTMLElement): OverlayRenderer {
+  const root = host.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  root.dataset.caretCustom = 'bubble'
+  root.setAttribute('aria-hidden', 'true')
+  root.style.position = 'absolute'
+  root.style.inset = '0'
+  root.style.width = '100%'
+  root.style.height = '100%'
+  root.style.pointerEvents = 'none'
+  root.style.overflow = 'visible'
+  root.style.zIndex = '9999'
+
+  return {
+    root: root as unknown as HTMLElement,
+    render({ visualState }) {
+      if (!root.parentNode) {
+        host.appendChild(root)
+      }
+
+      root.replaceChildren()
+      root.setAttribute('viewBox', `0 0 ${Math.max(host.clientWidth, 1)} ${Math.max(host.clientHeight, 1)}`)
+
+      if (visualState.selectionRects.length > 0) {
+        const bubble = root.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'path')
+        const shape = buildSelectionShapePath(visualState.selectionRects, {
+          kind: 'pill',
+          paddingX: 6,
+          paddingY: 4
+        })
+
+        if (shape.bounds !== null) {
+          const tailStartX = shape.bounds.x + Math.min(28, shape.bounds.width * 0.3)
+          const tailBaseY = shape.bounds.y + shape.bounds.height
+          const tail = [
+            `M ${tailStartX} ${tailBaseY - 2}`,
+            `L ${tailStartX + 12} ${tailBaseY + 2}`,
+            `L ${tailStartX + 4} ${tailBaseY + 12}`,
+            'Z'
+          ].join(' ')
+
+          bubble.dataset.caretCustomPart = 'selection-shape'
+          bubble.setAttribute('d', `${shape.path} ${tail}`)
+          bubble.setAttribute('fill', 'rgba(249, 115, 22, 0.18)')
+          bubble.setAttribute('stroke', 'rgba(194, 65, 12, 0.45)')
+          bubble.setAttribute('stroke-width', '1.5')
+          bubble.setAttribute('filter', 'drop-shadow(0 6px 12px rgba(194, 65, 12, 0.12))')
+          root.appendChild(bubble)
+        }
+      }
+
+      if (visualState.caret !== null) {
+        const caret = root.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'rect')
+        caret.dataset.caretCustomPart = 'caret'
+        caret.setAttribute('x', `${visualState.caret.x}`)
+        caret.setAttribute('y', `${visualState.caret.y}`)
+        caret.setAttribute('width', '3')
+        caret.setAttribute('height', `${visualState.caret.height}`)
+        caret.setAttribute('rx', '1.5')
+        caret.setAttribute('fill', '#c2410c')
         root.appendChild(caret)
       }
     },
@@ -169,6 +239,17 @@ export function App() {
           >
             <p>This example draws its own mint selection blocks.</p>
             <p>Use this path when CSS alone is not enough.</p>
+          </ExampleCard>
+
+          <ExampleCard
+            id="custom-shape"
+            title="Custom Shape Helper"
+            description="A custom bubble shape renderer built on top of the multiline shape helper."
+            createRenderer={createBubbleRenderer}
+            editorClassName="example-editor--bubble"
+          >
+            <p>This example turns selection rects into a speech-bubble style SVG path.</p>
+            <p>The helper handles multiline geometry and the renderer adds its own tail and paint.</p>
           </ExampleCard>
         </div>
       </section>
