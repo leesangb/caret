@@ -11,5 +11,8 @@
   "scripts": {
     "build": "vite build",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "latest"
   }
 }

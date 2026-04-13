@@ -8,7 +8,7 @@ function isBlockElement(node: Element): node is HTMLElement {
 }
 
 function collectBlockElements(root: HTMLElement): HTMLElement[] {
-  const blocks = Array.from(root.children).filter(isBlockElement)
+  const blocks = Array.from(root.querySelectorAll('p,div,li,blockquote,pre')).filter(isBlockElement)
 
   return blocks.length > 0 ? blocks : [root]
 }
