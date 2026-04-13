@@ -235,4 +235,35 @@ describe('deriveVisualState', () => {
       height: 24
     })
   })
+
+  it('keeps the last selection rect when the range ends inside an emoji surrogate pair', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>ABCD😄</p>'
+
+    const text = root.querySelector('p')?.firstChild
+    if (!(text instanceof Text)) {
+      throw new Error('Expected paragraph text node')
+    }
+
+    const model = createDocumentModel(root)
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 35,
+      lineHeight: 20,
+      font: '16px sans-serif',
+      charWidth: 10
+    })
+
+    const selection = getSelection(root, [text, 0], [text, 5])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.selectionRects.length).toBeGreaterThan(1)
+    expect(visualState.selectionRects.at(-1)).toEqual({
+      x: 0,
+      y: 20,
+      width: 30,
+      height: 20
+    })
+  })
 })

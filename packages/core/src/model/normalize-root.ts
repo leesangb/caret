@@ -118,7 +118,8 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
         start,
         end: start + text.length,
         node: textNode,
-        font: getCanvasFont(getTextHost(root, textNode))
+        font: getCanvasFont(getTextHost(root, textNode)),
+        lineHeight: getLineHeight(getTextHost(root, textNode))
       })
       start += text.length
     }

@@ -217,7 +217,7 @@ function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: Layout
 
 function buildLineRectsFromBoundaries(
   block: NormalizedBlock,
-  blockTop: number,
+  lineTop: number,
   lineHeight: number,
   lineIndex: number,
   lineWidth: number,
@@ -230,7 +230,7 @@ function buildLineRectsFromBoundaries(
     return [
       {
         x: 0,
-        y: blockTop + lineIndex * lineHeight,
+        y: lineTop,
         width: lineWidth,
         height: lineHeight,
         caretX: 0,
@@ -249,7 +249,7 @@ function buildLineRectsFromBoundaries(
 
     return {
       x: left,
-      y: blockTop + lineIndex * lineHeight,
+      y: lineTop,
       width: Math.max(0, right - left),
       height: lineHeight,
       caretX: boundary.caretX,
@@ -302,6 +302,7 @@ function buildRichInlineRects(
   const rects: SelectionGeometryRect[] = []
   let cursor: Parameters<typeof layoutNextRichInlineLineRange>[2] | undefined
   let lineIndex = 0
+  let lineTop = blockTop
 
   while (true) {
     const range = layoutNextRichInlineLineRange(flow, options.blockWidth, cursor)
@@ -312,12 +313,18 @@ function buildRichInlineRects(
     const line = materializeRichInlineLineRange(flow, range)
     const boundaries: Array<{ caretX: number; caretOffset: number }> = []
     let x = 0
+    let lineHeightForLine = block.lineHeight ?? options.lineHeight
 
     for (const fragment of line.fragments) {
       const preparedRun = runPrepared[fragment.itemIndex]
       if (preparedRun === undefined) {
         continue
       }
+
+      lineHeightForLine = Math.max(
+        lineHeightForLine,
+        preparedRun.run.lineHeight ?? block.lineHeight ?? options.lineHeight
+      )
 
       x += fragment.gapBefore
       const units = Array.from(fragment.text)
@@ -350,8 +357,8 @@ function buildRichInlineRects(
     rects.push(
       ...buildLineRectsFromBoundaries(
         block,
-        blockTop,
-        block.lineHeight ?? options.lineHeight,
+        lineTop,
+        lineHeightForLine,
         lineIndex,
         line.width,
         boundaries
@@ -359,13 +366,14 @@ function buildRichInlineRects(
     )
 
     cursor = line.end
+    lineTop += lineHeightForLine
     lineIndex += 1
   }
 
   if (rects.length === 0) {
     rects.push({
       x: 0,
-      y: blockTop,
+      y: lineTop,
       width: options.blockWidth,
       height: block.lineHeight ?? options.lineHeight,
       caretX: 0,
@@ -377,7 +385,7 @@ function buildRichInlineRects(
 
   return {
     rects,
-    lineCount: Math.max(1, lineIndex)
+    totalHeight: Math.max(block.lineHeight ?? options.lineHeight, lineTop - blockTop)
   }
 }
 
@@ -398,7 +406,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
         blockIndex,
         rects: rich.rects
       })
-      blockTop += rich.lineCount * blockLineHeight
+      blockTop += rich.totalHeight
       continue
     }
 

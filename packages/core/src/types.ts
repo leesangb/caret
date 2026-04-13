@@ -27,6 +27,7 @@ export interface NormalizedRun {
   end: number
   node: Node
   font?: string
+  lineHeight?: number
   placeholder?: true
 }
 

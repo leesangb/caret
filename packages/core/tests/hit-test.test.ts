@@ -123,4 +123,29 @@ describe('selection geometry and hit testing', () => {
     expect(boxes[0].rects.every((rect) => Number.isFinite(rect.x) && Number.isFinite(rect.width))).toBe(true)
     expect(hit?.offset).toBe(3)
   })
+
+  it('uses per-line rich inline heights when mixed runs wrap', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>AA</span><span>B</span><span>CC</span></p>'
+    const model = createDocumentModel(root)
+
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '16px serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 20
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '32px serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).font = '16px serif'
+    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).lineHeight = 20
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 45,
+      lineHeight: 20,
+      font: '16px serif'
+    })
+
+    const lineTops = [...new Set(boxes[0].rects.map((rect) => rect.y))]
+
+    expect(lineTops).toEqual([0, 32])
+  })
 })

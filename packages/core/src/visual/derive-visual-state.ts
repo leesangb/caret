@@ -122,6 +122,35 @@ function findBoundary(
   return rects.find((rect) => rect.caretOffset === absoluteOffset) ?? null
 }
 
+function findBoundaryAtOrBefore(
+  rects: SelectionGeometryRect[],
+  absoluteOffset: number,
+): SelectionGeometryRect | null {
+  let candidate: SelectionGeometryRect | null = null
+
+  for (const rect of rects) {
+    if (rect.caretOffset > absoluteOffset) {
+      break
+    }
+    candidate = rect
+  }
+
+  return candidate
+}
+
+function findBoundaryAtOrAfter(
+  rects: SelectionGeometryRect[],
+  absoluteOffset: number,
+): SelectionGeometryRect | null {
+  for (const rect of rects) {
+    if (rect.caretOffset >= absoluteOffset) {
+      return rect
+    }
+  }
+
+  return null
+}
+
 function compareResolvedOffsets(
   left: { blockIndex: number; offset: number },
   right: { blockIndex: number; offset: number },
@@ -131,6 +160,51 @@ function compareResolvedOffsets(
   }
 
   return left.offset - right.offset
+}
+
+function normalizeResolvedOffset(
+  geometry: SelectionGeometryBlock[],
+  resolved: { blockIndex: number; offset: number },
+  direction: 'backward' | 'forward',
+) {
+  const block = geometry.find((entry) => entry.blockIndex === resolved.blockIndex)
+  if (block === undefined) {
+    return resolved
+  }
+
+  const offsets = [...new Set(block.rects.map((rect) => rect.caretOffset))].sort((left, right) => left - right)
+  if (offsets.includes(resolved.offset)) {
+    return resolved
+  }
+
+  if (direction === 'backward') {
+    let normalized = offsets[0] ?? resolved.offset
+    for (const offset of offsets) {
+      if (offset > resolved.offset) {
+        break
+      }
+      normalized = offset
+    }
+
+    return {
+      blockIndex: resolved.blockIndex,
+      offset: normalized
+    }
+  }
+
+  for (const offset of offsets) {
+    if (offset >= resolved.offset) {
+      return {
+        blockIndex: resolved.blockIndex,
+        offset
+      }
+    }
+  }
+
+  return {
+    blockIndex: resolved.blockIndex,
+    offset: offsets[offsets.length - 1] ?? resolved.offset
+  }
 }
 
 function getLineRects(geometry: SelectionGeometryBlock[]) {
@@ -230,6 +304,9 @@ export function deriveVisualState(
     }
   }
 
+  const normalizedStartOffset = normalizeResolvedOffset(geometry, startOffset, 'backward')
+  const normalizedEndOffset = normalizeResolvedOffset(geometry, endOffset, 'forward')
+
   const selectionRects: OverlayRect[] = []
 
   for (const line of lineRects) {
@@ -250,23 +327,23 @@ export function deriveVisualState(
     }
 
     if (
-      compareResolvedOffsets(startOffset, lineEnd) >= 0 ||
-      compareResolvedOffsets(endOffset, lineStart) <= 0
+      compareResolvedOffsets(normalizedStartOffset, lineEnd) >= 0 ||
+      compareResolvedOffsets(normalizedEndOffset, lineStart) <= 0
     ) {
       continue
     }
 
     const startBoundary =
-      compareResolvedOffsets(startOffset, lineStart) <= 0
+      compareResolvedOffsets(normalizedStartOffset, lineStart) <= 0
         ? first
-        : startOffset.blockIndex === line.blockIndex
-          ? findBoundary(rects, startOffset.offset)
+        : normalizedStartOffset.blockIndex === line.blockIndex
+          ? findBoundaryAtOrBefore(rects, normalizedStartOffset.offset)
           : null
     const endBoundary =
-      compareResolvedOffsets(endOffset, lineEnd) >= 0
+      compareResolvedOffsets(normalizedEndOffset, lineEnd) >= 0
         ? last
-        : endOffset.blockIndex === line.blockIndex
-          ? findBoundary(rects, endOffset.offset)
+        : normalizedEndOffset.blockIndex === line.blockIndex
+          ? findBoundaryAtOrAfter(rects, normalizedEndOffset.offset)
           : null
 
     if (startBoundary === null || endBoundary === null) {
