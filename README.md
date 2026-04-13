@@ -116,7 +116,7 @@ export function Editor() {
 
 ![Styled overlay example](assets/readme/styled-example.png)
 
-Use the built-in renderer, but style it with classes and CSS variables:
+Use the built-in renderer, but tune the appearance directly:
 
 ```tsx
 import { CaretRoot } from '@caret/react'
@@ -128,6 +128,11 @@ export function Editor() {
       createRenderer={(host) =>
         createOverlayRenderer(host, {
           caretWidth: 3,
+          caretColor: '#0f172a',
+          caretRadius: 3,
+          selectionBackground: 'rgba(37, 99, 235, 0.2)',
+          selectionOutline: '1px solid rgba(37, 99, 235, 0.4)',
+          selectionRadius: 8,
           classNames: {
             root: 'styled-overlay',
             caret: 'styled-overlay__caret',
@@ -138,7 +143,7 @@ export function Editor() {
     >
       <div className="example-editor--styled" contentEditable suppressContentEditableWarning>
         <p>A thinner caret can feel more editor-like.</p>
-        <p>Use CSS variables to tune color, outline, and radius.</p>
+        <p>Use renderer options for radius, color, and outline without replacing the renderer.</p>
       </div>
     </CaretRoot>
   )
@@ -146,14 +151,8 @@ export function Editor() {
 ```
 
 ```css
-.example-editor--styled .styled-overlay__caret {
-  --caret-color: #0f172a;
-  --caret-radius: 3px;
-}
-
-.example-editor--styled .styled-overlay__selection {
-  --caret-selection-background: rgba(37, 99, 235, 0.2);
-  --caret-selection-outline: 1px solid rgba(37, 99, 235, 0.4);
+.styled-overlay {
+  filter: saturate(1.05);
 }
 ```
 
@@ -227,6 +226,16 @@ It also supports CSS variables:
 - `--caret-radius`
 - `--caret-selection-background`
 - `--caret-selection-outline`
+- `--caret-selection-radius`
+
+For most styling, prefer renderer options:
+
+- `caretWidth`
+- `caretColor`
+- `caretRadius`
+- `selectionBackground`
+- `selectionOutline`
+- `selectionRadius`
 
 ### Style With `createOverlayRenderer`
 
@@ -238,6 +247,11 @@ const caret = attachCaret({
   createRenderer(host) {
     return createOverlayRenderer(host, {
       caretWidth: 3,
+      caretColor: '#111827',
+      caretRadius: 2,
+      selectionBackground: 'rgba(59, 130, 246, 0.22)',
+      selectionOutline: '1px solid rgba(59, 130, 246, 0.32)',
+      selectionRadius: 8,
       classNames: {
         root: 'caret-overlay',
         caret: 'caret-overlay__caret',
@@ -251,14 +265,8 @@ caret.mount()
 ```
 
 ```css
-.caret-overlay__caret {
-  --caret-color: #111827;
-  --caret-radius: 2px;
-}
-
 .caret-overlay__selection {
-  --caret-selection-background: rgba(59, 130, 246, 0.22);
-  --caret-selection-outline: 1px solid rgba(59, 130, 246, 0.32);
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.12);
 }
 ```
 

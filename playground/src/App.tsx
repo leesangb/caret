@@ -14,6 +14,11 @@ interface ExampleCardProps {
 function createStyledRenderer(host: HTMLElement) {
   return createOverlayRenderer(host, {
     caretWidth: 3,
+    caretColor: '#0f172a',
+    caretRadius: 3,
+    selectionBackground: 'rgba(37, 99, 235, 0.2)',
+    selectionOutline: '1px solid rgba(37, 99, 235, 0.4)',
+    selectionRadius: 8,
     classNames: {
       root: 'styled-overlay',
       caret: 'styled-overlay__caret',
@@ -140,12 +145,12 @@ export function App() {
           <ExampleCard
             id="styled"
             title="CSS Styled Overlay"
-            description="Same overlay renderer, but styled with classes and CSS variables."
+            description="Same overlay renderer, but styled with appearance options and optional classes."
             createRenderer={createStyledRenderer}
             editorClassName="example-editor--styled"
           >
             <p>A thinner caret can feel more editor-like.</p>
-            <p>Use CSS variables to tune color, outline, and radius.</p>
+            <p>Use renderer options for radius, color, and outline without replacing the renderer.</p>
           </ExampleCard>
 
           <ExampleCard

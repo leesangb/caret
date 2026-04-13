@@ -223,6 +223,94 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('does not double-count vertical offsets for later blocks', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.style.padding = '18px 20px'
+    root.innerHTML = '<p>Hello world</p><p>Second line</p>'
+    document.body.appendChild(root)
+
+    const paragraphs = root.querySelectorAll('p')
+    const firstParagraph = paragraphs[0]
+    const secondParagraph = paragraphs[1]
+    if (!(firstParagraph instanceof HTMLElement) || !(secondParagraph instanceof HTMLElement)) {
+      throw new Error('Expected paragraph elements')
+    }
+
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 220,
+      bottom: 160,
+      width: 220,
+      height: 160,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+    vi.spyOn(firstParagraph, 'getBoundingClientRect').mockReturnValue({
+      x: 20,
+      y: 18,
+      left: 20,
+      top: 18,
+      right: 130,
+      bottom: 38,
+      width: 110,
+      height: 20,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+    vi.spyOn(secondParagraph, 'getBoundingClientRect').mockReturnValue({
+      x: 20,
+      y: 72,
+      left: 20,
+      top: 72,
+      right: 130,
+      bottom: 92,
+      width: 110,
+      height: 20,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+
+    const render = vi.fn()
+    const createRenderer = vi.fn((host: HTMLElement) => ({
+      root: host.ownerDocument.createElement('div'),
+      render,
+      destroy: vi.fn()
+    }))
+
+    const caret = attachCaret({ root, createRenderer })
+    caret.mount()
+    caret.setSelection({
+      anchor: {
+        path: [1, 0],
+        offset: 0
+      },
+      focus: {
+        path: [1, 0],
+        offset: 6
+      }
+    })
+
+    expect(render.mock.lastCall?.[0]?.visualState.selectionRects).toEqual([
+      {
+        x: 20,
+        y: 72,
+        width: 60,
+        height: 20
+      }
+    ])
+
+    caret.unmount()
+    root.remove()
+  })
+
   it('falls back without mounting the overlay for rtl roots', () => {
     installMeasureMock()
 

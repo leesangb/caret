@@ -12,7 +12,12 @@ describe('createOverlayRenderer', () => {
         caret: 'caret-part',
         selection: 'selection-part'
       },
-      caretWidth: 3
+      caretWidth: 3,
+      caretColor: '#111827',
+      caretRadius: 4,
+      selectionBackground: 'rgba(59, 130, 246, 0.22)',
+      selectionOutline: '1px solid rgba(59, 130, 246, 0.35)',
+      selectionRadius: 8
     })
 
     renderer.render({
@@ -42,12 +47,13 @@ describe('createOverlayRenderer', () => {
     expect(caret).toBeInstanceOf(HTMLElement)
     expect((caret as HTMLElement).classList.contains('caret-part')).toBe(true)
     expect((caret as HTMLElement).style.width).toBe('3px')
-    expect((caret as HTMLElement).style.background).toContain('var(--caret-color')
-    expect((caret as HTMLElement).style.borderRadius).toContain('var(--caret-radius')
+    expect((caret as HTMLElement).style.background).toBe('rgb(17, 24, 39)')
+    expect((caret as HTMLElement).style.borderRadius).toBe('4px')
     expect(selection).toBeInstanceOf(HTMLElement)
     expect((selection as HTMLElement).classList.contains('selection-part')).toBe(true)
-    expect((selection as HTMLElement).style.background).toContain('var(--caret-selection-background')
-    expect((selection as HTMLElement).style.outline).toContain('var(--caret-selection-outline')
+    expect((selection as HTMLElement).style.background).toBe('rgba(59, 130, 246, 0.22)')
+    expect((selection as HTMLElement).style.outline).toBe('1px solid rgba(59, 130, 246, 0.35)')
+    expect((selection as HTMLElement).style.borderRadius).toBe('8px')
 
     renderer.destroy()
     host.remove()

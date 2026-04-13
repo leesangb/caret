@@ -148,13 +148,14 @@ function positionGeometry(
     const offsetY = element === root
       ? rootMetrics.paddingTop
       : elementRect.top - rootOriginY + elementMetrics.paddingTop
+    const baseY = blockGeometry.rects[0]?.y ?? 0
 
     return {
       blockIndex: blockGeometry.blockIndex,
       rects: blockGeometry.rects.map((rect) => ({
         ...rect,
         x: rect.x + offsetX,
-        y: rect.y + offsetY,
+        y: rect.y - baseY + offsetY,
         caretX: rect.caretX + offsetX
       }))
     }

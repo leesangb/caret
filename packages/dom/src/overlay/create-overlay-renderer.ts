@@ -12,11 +12,24 @@ export interface OverlayRenderer {
 
 export interface OverlayRendererOptions {
   caretWidth?: number
+  caretColor?: string
+  caretRadius?: number | string
+  selectionBackground?: string
+  selectionOutline?: string
+  selectionRadius?: number | string
   classNames?: {
     root?: string
     caret?: string
     selection?: string
   }
+}
+
+function formatCssLength(value: number | string | undefined, fallback: string) {
+  if (value === undefined) {
+    return fallback
+  }
+
+  return typeof value === 'number' ? `${value}px` : value
 }
 
 function ensureOverlayRoot(host: HTMLElement) {
@@ -44,6 +57,19 @@ export function createOverlayRenderer(
 ): OverlayRenderer {
   const root = ensureOverlayRoot(host)
   const caretWidth = options.caretWidth ?? 2
+  const caretBackground = options.caretColor ?? 'var(--caret-color, rgba(15, 23, 42, 0.9))'
+  const caretRadius = formatCssLength(
+    options.caretRadius,
+    `var(--caret-radius, ${Math.min(caretWidth / 2, 2)}px)`
+  )
+  const selectionBackground =
+    options.selectionBackground ?? 'var(--caret-selection-background, rgba(30, 64, 175, 0.16))'
+  const selectionOutline =
+    options.selectionOutline ?? 'var(--caret-selection-outline, 1px solid rgba(30, 64, 175, 0.18))'
+  const selectionRadius = formatCssLength(
+    options.selectionRadius,
+    'var(--caret-selection-radius, 0px)'
+  )
   let mounted = false
 
   if (options.classNames?.root !== undefined) {
@@ -71,8 +97,9 @@ export function createOverlayRenderer(
       marker.style.top = `${rect.y}px`
       marker.style.width = `${Math.max(0, rect.width)}px`
       marker.style.height = `${Math.max(0, rect.height)}px`
-      marker.style.background = 'var(--caret-selection-background, rgba(30, 64, 175, 0.16))'
-      marker.style.outline = 'var(--caret-selection-outline, 1px solid rgba(30, 64, 175, 0.18))'
+      marker.style.background = selectionBackground
+      marker.style.outline = selectionOutline
+      marker.style.borderRadius = selectionRadius
       root.appendChild(marker)
     }
 
@@ -87,8 +114,8 @@ export function createOverlayRenderer(
       marker.style.top = `${caret.y}px`
       marker.style.width = `${caretWidth}px`
       marker.style.height = `${Math.max(0, caret.height)}px`
-      marker.style.background = 'var(--caret-color, rgba(15, 23, 42, 0.9))'
-      marker.style.borderRadius = `var(--caret-radius, ${Math.min(caretWidth / 2, 2)}px)`
+      marker.style.background = caretBackground
+      marker.style.borderRadius = caretRadius
       root.appendChild(marker)
     }
   }
