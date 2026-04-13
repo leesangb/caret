@@ -1,3 +1,4 @@
+import { createDocumentModel, createSelectionGeometry } from '@caret/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { attachCaret, createInvalidator } from '../src'
 
@@ -11,6 +12,40 @@ function installMeasureMock() {
   } as CanvasRenderingContext2D
 
   getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+}
+
+function installRichMeasureMock() {
+  const context = {
+    font: '',
+    measureText(text: string) {
+      const sizeMatch = this.font.match(/(\d+(?:\.\d+)?)px/)
+      const fontSize = sizeMatch === null ? 16 : Number.parseFloat(sizeMatch[1]!)
+
+      return {
+        width: Array.from(text).length * Math.max(8, fontSize * 0.56),
+        actualBoundingBoxAscent: fontSize * 0.72,
+        actualBoundingBoxDescent: fontSize * 0.28
+      }
+    }
+  } as CanvasRenderingContext2D
+
+  getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+}
+
+function getGeometryOptions(root: HTMLElement) {
+  const computed = window.getComputedStyle(root)
+  const lineHeight = Number.parseFloat(computed.lineHeight || '') || 20
+  const font = computed.font || '16px sans-serif'
+  const paddingLeft = Number.parseFloat(computed.paddingLeft || '') || 0
+  const paddingRight = Number.parseFloat(computed.paddingRight || '') || 0
+  const rect = root.getBoundingClientRect()
+  const blockWidth = Math.max(1, Math.round(rect.width - paddingLeft - paddingRight))
+
+  return {
+    blockWidth,
+    lineHeight,
+    font
+  }
 }
 
 afterEach(() => {
@@ -306,6 +341,93 @@ describe('attachCaret', () => {
         height: 20
       }
     ])
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('preserves pretext line insets when positioning mixed-font caret geometry', () => {
+    installRichMeasureMock()
+
+    const root = document.createElement('div')
+    root.style.font = '16px sans-serif'
+    root.style.lineHeight = '20px'
+    root.style.padding = '18px 20px'
+    root.innerHTML = [
+      '<p style="line-height: 32px">',
+      '<span style="font: 16px serif; line-height: 32px">Hello </span>',
+      '<span style="font: 28px Georgia; line-height: 32px">World</span>',
+      '</p>'
+    ].join('')
+    document.body.appendChild(root)
+
+    const paragraph = root.querySelector('p')
+    const text = root.querySelector('span')?.firstChild
+    if (!(paragraph instanceof HTMLElement) || !(text instanceof Text)) {
+      throw new Error('Expected paragraph and text node')
+    }
+
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 260,
+      bottom: 120,
+      width: 260,
+      height: 120,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+    vi.spyOn(paragraph, 'getBoundingClientRect').mockReturnValue({
+      x: 20,
+      y: 18,
+      left: 20,
+      top: 18,
+      right: 220,
+      bottom: 50,
+      width: 200,
+      height: 32,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+
+    const render = vi.fn()
+    const caret = attachCaret({
+      root,
+      createRenderer: (host) => ({
+        root: host.ownerDocument.createElement('div'),
+        render,
+        destroy: vi.fn()
+      })
+    })
+
+    const model = createDocumentModel(root)
+    const geometry = createSelectionGeometry(model, getGeometryOptions(root))
+    const localInset = geometry[0]!.rects[0]!.y - geometry[0]!.originY
+
+    caret.mount()
+
+    const selection = window.getSelection()
+    if (selection === null) {
+      throw new Error('Expected document selection')
+    }
+
+    const range = document.createRange()
+    range.setStart(text, 1)
+    range.setEnd(text, 1)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+
+    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
+      x: expect.any(Number),
+      y: 18 + localInset,
+      height: geometry[0]!.rects[1]!.height
+    })
+    expect(localInset).toBeGreaterThan(0)
 
     caret.unmount()
     root.remove()

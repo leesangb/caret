@@ -236,6 +236,55 @@ describe('deriveVisualState', () => {
     })
   })
 
+  it('prefers font bounding metrics for mixed inline caret height when available', () => {
+    const context = {
+      font: '',
+      measureText(this: CanvasRenderingContext2D, text: string) {
+        const unitWidth = this.font.includes('32px') ? 20 : 10
+
+        return {
+          width: text.length * unitWidth,
+          fontBoundingBoxAscent: 18,
+          fontBoundingBoxDescent: 8,
+          actualBoundingBoxAscent: 12,
+          actualBoundingBoxDescent: 4
+        }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>Hi</span><span>!</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const secondText = text[1]?.firstChild
+    if (!(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '16px serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '32px serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 24,
+      font: '16px serif'
+    })
+
+    const selection = getSelection(root, [secondText, 1], [secondText, 1])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.caret).toEqual({
+      x: 40,
+      y: 3,
+      height: 26
+    })
+  })
+
   it('keeps the last selection rect when the range ends inside an emoji surrogate pair', () => {
     installMeasureMock()
 

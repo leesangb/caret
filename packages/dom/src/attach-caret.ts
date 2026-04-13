@@ -148,7 +148,7 @@ function positionGeometry(
     const offsetY = element === root
       ? rootMetrics.paddingTop
       : elementRect.top - rootOriginY + elementMetrics.paddingTop
-    const baseY = blockGeometry.rects[0]?.y ?? 0
+    const baseY = blockGeometry.originY
 
     return {
       blockIndex: blockGeometry.blockIndex,

@@ -73,9 +73,13 @@ function measureFontBox(context: CanvasRenderingContext2D | null) {
     }
   }
 
-  const metrics = context.measureText('Ay')
-  const ascent = metrics.actualBoundingBoxAscent
-  const descent = metrics.actualBoundingBoxDescent
+  const metrics = context.measureText('Mg')
+  const ascent = Number.isFinite(metrics.fontBoundingBoxAscent)
+    ? metrics.fontBoundingBoxAscent
+    : metrics.actualBoundingBoxAscent
+  const descent = Number.isFinite(metrics.fontBoundingBoxDescent)
+    ? metrics.fontBoundingBoxDescent
+    : metrics.actualBoundingBoxDescent
 
   return {
     ascent: ascent > 0 ? ascent : 0,
