@@ -1,15 +1,26 @@
 import { attachCaret } from '@caret/dom'
-import { cloneElement, useEffect, useRef, type ReactElement } from 'react'
+import { cloneElement, useEffect, useState, type ReactElement, type Ref } from 'react'
 
 export interface CaretRootProps {
   children: ReactElement
 }
 
+function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
+  if (typeof ref === 'function') {
+    ref(value)
+    return
+  }
+
+  if (ref !== null && ref !== undefined) {
+    ref.current = value
+  }
+}
+
 export function CaretRoot({ children }: CaretRootProps) {
-  const rootRef = useRef<HTMLElement | null>(null)
+  const [root, setRoot] = useState<HTMLElement | null>(null)
+  const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref
 
   useEffect(() => {
-    const root = rootRef.current
     if (root === null) return
 
     const caret = attachCaret({ root })
@@ -18,7 +29,12 @@ export function CaretRoot({ children }: CaretRootProps) {
     return () => {
       caret.unmount()
     }
-  }, [])
+  }, [root])
 
-  return cloneElement(children, { ref: rootRef })
+  return cloneElement(children, {
+    ref: (node: HTMLElement | null) => {
+      assignRef(childRef, node)
+      setRoot((currentRoot) => (currentRoot === node ? currentRoot : node))
+    }
+  })
 }
