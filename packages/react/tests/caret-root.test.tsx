@@ -1,5 +1,5 @@
 import { createRef } from 'react'
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { attachCaretMock } = vi.hoisted(() => {
@@ -24,6 +24,7 @@ vi.mock('@caret/dom', () => ({
 import { CaretRoot } from '../src'
 
 afterEach(() => {
+  cleanup()
   vi.clearAllMocks()
 })
 
@@ -64,6 +65,23 @@ describe('CaretRoot', () => {
     const child = screen.getByText('Hello')
 
     expect(childRef.current).toBe(child)
+  })
+
+  it('forwards createRenderer to attachCaret', () => {
+    const createRenderer = vi.fn()
+
+    render(
+      <CaretRoot createRenderer={createRenderer}>
+        <div>Hello</div>
+      </CaretRoot>
+    )
+
+    const child = screen.getByText('Hello')
+
+    expect(attachCaretMock).toHaveBeenCalledWith({
+      root: child,
+      createRenderer
+    })
   })
 
   it('rebinds to a new root when the child element changes', () => {

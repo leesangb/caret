@@ -45,6 +45,94 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('uses a custom renderer factory for caret and selection visuals', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const render = vi.fn()
+    const destroy = vi.fn()
+    const createRenderer = vi.fn((host: HTMLElement) => ({
+      root: host.ownerDocument.createElement('div'),
+      render,
+      destroy
+    }))
+
+    const caret = attachCaret({ root, createRenderer })
+    caret.mount()
+
+    expect(createRenderer).toHaveBeenCalledWith(root)
+    expect(render).toHaveBeenCalled()
+    expect(render.mock.lastCall?.[0]).toEqual({
+      visualState: {
+        caret: null,
+        selectionRects: []
+      }
+    })
+
+    caret.setCollapsedPosition({
+      path: [0, 0],
+      offset: 2
+    })
+
+    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
+      x: 20,
+      y: 0,
+      height: 20
+    })
+
+    caret.unmount()
+
+    expect(destroy).toHaveBeenCalledTimes(1)
+    root.remove()
+  })
+
+  it('renders inline-boundary DOM selections through the visual-state pipeline', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello <strong>world</strong></p>'
+    document.body.appendChild(root)
+
+    const render = vi.fn()
+    const createRenderer = vi.fn((host: HTMLElement) => ({
+      root: host.ownerDocument.createElement('div'),
+      render,
+      destroy: vi.fn()
+    }))
+
+    const caret = attachCaret({ root, createRenderer })
+    caret.mount()
+
+    const paragraph = root.querySelector('p')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('Expected paragraph element')
+    }
+
+    const selection = window.getSelection()
+    if (selection === null) {
+      throw new Error('Expected document selection')
+    }
+
+    const range = document.createRange()
+    range.setStart(paragraph, 1)
+    range.setEnd(paragraph, 1)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+
+    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
+      x: 60,
+      y: 0,
+      height: 20
+    })
+
+    caret.unmount()
+    root.remove()
+  })
+
   it('falls back without mounting the overlay for rtl roots', () => {
     installMeasureMock()
 
@@ -70,6 +158,108 @@ describe('attachCaret', () => {
 
     caret.unmount()
     root.remove()
+  })
+
+  it('falls back when the root switches to rtl before mount', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+
+    root.dir = 'rtl'
+
+    expect(caret.supportState).toEqual({
+      supported: false,
+      reason: 'rtl-root'
+    })
+    caret.setCollapsedPosition({
+      path: [0, 0],
+      offset: 0
+    })
+    expect(caret.getSelection()).toBeNull()
+
+    caret.mount()
+
+    expect(caret.supportState).toEqual({
+      supported: false,
+      reason: 'rtl-root'
+    })
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
+
+    caret.setCollapsedPosition({
+      path: [0, 0],
+      offset: 0
+    })
+    expect(caret.getSelection()).toBeNull()
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('tears down the overlay when the mounted root switches to rtl', async () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
+
+    root.dir = 'rtl'
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve())
+      })
+    })
+
+    expect(caret.supportState).toEqual({
+      supported: false,
+      reason: 'rtl-root'
+    })
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
+    expect(caret.getSelection()).toBeNull()
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('tears down the overlay when an ancestor switches to rtl after mount', async () => {
+    installMeasureMock()
+
+    const wrapper = document.createElement('div')
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    wrapper.appendChild(root)
+    document.body.appendChild(wrapper)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
+
+    wrapper.dir = 'rtl'
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => resolve())
+      })
+    })
+
+    expect(caret.supportState).toEqual({
+      supported: false,
+      reason: 'rtl-root'
+    })
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
+
+    caret.unmount()
+    wrapper.remove()
   })
 
   it('syncs selection from the DOM selection object', () => {

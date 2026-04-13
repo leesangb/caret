@@ -1,6 +1,7 @@
 import {
   createDocumentModel,
   createSelectionGeometry,
+  deriveVisualState,
   fromDOMRange,
   hitTest as coreHitTest,
   toDOMRange,
@@ -11,12 +12,16 @@ import {
   type SelectionGeometryBlock
 } from '@caret/core'
 import { createInvalidator } from './observers/create-invalidator'
-import { createOverlayRenderer } from './overlay/create-overlay-renderer'
+import {
+  createOverlayRenderer,
+  type OverlayRenderer
+} from './overlay/create-overlay-renderer'
 
 type SelectionChangeListener = (selection: CaretSelection | null) => void
 
 export interface AttachCaretOptions {
   root: HTMLElement
+  createRenderer?: (host: HTMLElement) => OverlayRenderer
 }
 
 export interface AttachCaretController {
@@ -137,14 +142,19 @@ function getSupportState(root: HTMLElement): CaretSupportState {
   const view = root.ownerDocument?.defaultView ?? globalThis.window
   const computedDirection = view?.getComputedStyle(root).direction ?? root.dir
 
-  if (
-    computedDirection === 'rtl' ||
-    root.dir === 'rtl' ||
-    root.getAttribute('dir') === 'rtl'
-  ) {
+  if (computedDirection === 'rtl') {
     return {
       supported: false,
       reason: 'rtl-root'
+    }
+  }
+
+  for (let current: HTMLElement | null = root; current !== null; current = current.parentElement) {
+    if (current.dir === 'rtl' || current.getAttribute('dir') === 'rtl') {
+      return {
+        supported: false,
+        reason: 'rtl-root'
+      }
     }
   }
 
@@ -153,53 +163,61 @@ function getSupportState(root: HTMLElement): CaretSupportState {
   }
 }
 
-export function attachCaret({ root }: AttachCaretOptions): AttachCaretController {
-  const supportState = getSupportState(root)
+const mutationObserverOptions: MutationObserverInit = {
+  subtree: true,
+  childList: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ['dir', 'class', 'style']
+}
 
-  if (!supportState.supported) {
-    return {
-      supportState,
-      mount() {},
-      unmount() {},
-      refresh() {},
-      getSelection() {
-        return null
-      },
-      setSelection(_selection: CaretSelection) {},
-      setCollapsedPosition(_position: CaretPosition) {},
-      setSelectionFromDOM() {
-        return null
-      },
-      toDOMRange(selection: CaretSelection) {
-        return toDOMRange(createDocumentModel(root), selection)
-      },
-      fromDOMRange(range: Range) {
-        return fromDOMRange(createDocumentModel(root), range)
-      },
-      hitTest(_point: { x: number; y: number }) {
-        return null
-      },
-      on(_event: 'selectionchange', _listener: SelectionChangeListener) {
-        return () => undefined
-      }
-    }
-  }
+const ancestorObserverOptions: MutationObserverInit = {
+  attributes: true,
+  attributeFilter: ['dir', 'class', 'style']
+}
 
-  const overlay = createOverlayRenderer(root)
+export function attachCaret({ root, createRenderer }: AttachCaretOptions): AttachCaretController {
+  let supportState = getSupportState(root)
+  let overlay: OverlayRenderer | null = null
   const listeners = new Set<SelectionChangeListener>()
   let snapshot: Snapshot | null = null
   let mounted = false
   let currentSelection: CaretSelection | null = null
   let mutationObserver: MutationObserver | null = null
   let selectionListener: (() => void) | null = null
+  let resizeListener: (() => void) | null = null
   let invalidator = createInvalidator(() => {
     refresh()
   })
   let restorePositionStyle = false
   const view = root.ownerDocument?.defaultView ?? globalThis.window
 
+  const ensureOverlay = () => {
+    if (overlay === null) {
+      overlay = createRenderer?.(root) ?? createOverlayRenderer(root)
+    }
+
+    return overlay
+  }
+
+  const updateSupportState = () => {
+    supportState = getSupportState(root)
+    return supportState
+  }
+
+  const observeMutations = (observer: MutationObserver) => {
+    observer.observe(root, mutationObserverOptions)
+
+    for (let ancestor = root.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+      observer.observe(ancestor, ancestorObserverOptions)
+    }
+  }
+
   const readSnapshot = () => {
-    const model = readModelWithoutOverlay(root, overlay.root)
+    const model = overlay === null
+      ? createDocumentModel(root)
+      : readModelWithoutOverlay(root, overlay.root)
+
     snapshot = {
       model,
       geometry: createSelectionGeometry(model, getGeometryOptions(root))
@@ -213,12 +231,18 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   const render = () => {
+    if (!supportState.supported) {
+      return
+    }
+
     if (snapshot === null) {
       readSnapshot()
     }
 
     if (snapshot === null) return
-    overlay.render({ geometry: snapshot.geometry })
+    ensureOverlay().render({
+      visualState: deriveVisualState(snapshot.model, currentSelection, snapshot.geometry)
+    })
   }
 
   function syncDomSelection(selection: CaretSelection) {
@@ -275,6 +299,15 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
     observer?.disconnect()
 
     try {
+      updateSupportState()
+      if (!supportState.supported) {
+        snapshot = null
+        overlay?.destroy()
+        overlay = null
+        commitSelection(null, false)
+        return
+      }
+
       readSnapshot()
       if (snapshot !== null) {
         commitSelection(selectionFromDocument(root, snapshot.model), false)
@@ -282,11 +315,7 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
       render()
     } finally {
       if (mounted && mutationObserver === observer && observer !== null) {
-        observer.observe(root, {
-          subtree: true,
-          childList: true,
-          characterData: true
-        })
+        observeMutations(observer)
       }
     }
   }
@@ -302,6 +331,10 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
       syncDomSelection(nextSelection)
     }
 
+    if (mounted) {
+      render()
+    }
+
     emitSelection()
   }
 
@@ -310,6 +343,11 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   function setSelectionFromDOM() {
+    if (!updateSupportState().supported) {
+      commitSelection(null, false)
+      return null
+    }
+
     const nextSelection = selectionFromDocument(root, snapshot?.model ?? createDocumentModel(root))
     commitSelection(nextSelection, false)
     return nextSelection
@@ -317,6 +355,11 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
 
   function mount() {
     if (mounted) return
+
+    updateSupportState()
+    if (!supportState.supported) {
+      return
+    }
 
     mounted = true
 
@@ -340,14 +383,18 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
       }
     }
 
+    const onResize = () => {
+      scheduleRefresh()
+    }
+    view?.addEventListener('resize', onResize)
+    resizeListener = () => {
+      view?.removeEventListener('resize', onResize)
+    }
+
     mutationObserver = new MutationObserver(() => {
       scheduleRefresh()
     })
-    mutationObserver.observe(root, {
-      subtree: true,
-      childList: true,
-      characterData: true
-    })
+    observeMutations(mutationObserver)
   }
 
   function unmount() {
@@ -358,7 +405,10 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
     mutationObserver = null
     selectionListener?.()
     selectionListener = null
-    overlay.destroy()
+    resizeListener?.()
+    resizeListener = null
+    overlay?.destroy()
+    overlay = null
 
     if (restorePositionStyle !== false) {
       root.style.position = restorePositionStyle
@@ -368,17 +418,33 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   return {
-    supportState,
+    get supportState() {
+      return updateSupportState()
+    },
     mount,
     unmount,
     refresh,
     getSelection() {
+      if (!updateSupportState().supported) {
+        return null
+      }
+
       return currentSelection
     },
     setSelection(selection: CaretSelection) {
+      if (!updateSupportState().supported) {
+        commitSelection(null, false)
+        return
+      }
+
       commitSelection(selection, true)
     },
     setCollapsedPosition(position: CaretPosition) {
+      if (!updateSupportState().supported) {
+        commitSelection(null, false)
+        return
+      }
+
       commitSelection({
         anchor: position,
         focus: position
@@ -392,6 +458,10 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
       return fromDOMRange(snapshot?.model ?? createDocumentModel(root), range)
     },
     hitTest(point: { x: number; y: number }) {
+      if (!updateSupportState().supported) {
+        return null
+      }
+
       if (snapshot === null) {
         readSnapshot()
       }

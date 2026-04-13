@@ -1,8 +1,9 @@
-import { attachCaret } from '@caret/dom'
+import { attachCaret, type OverlayRenderer } from '@caret/dom'
 import { cloneElement, useEffect, useState, type ReactElement, type Ref } from 'react'
 
 export interface CaretRootProps {
   children: ReactElement
+  createRenderer?: (host: HTMLElement) => OverlayRenderer
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
@@ -16,20 +17,20 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
   }
 }
 
-export function CaretRoot({ children }: CaretRootProps) {
+export function CaretRoot({ children, createRenderer }: CaretRootProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref
 
   useEffect(() => {
     if (root === null) return
 
-    const caret = attachCaret({ root })
+    const caret = attachCaret({ root, createRenderer })
     caret.mount()
 
     return () => {
       caret.unmount()
     }
-  }, [root])
+  }, [createRenderer, root])
 
   return cloneElement(children, {
     ref: (node: HTMLElement | null) => {

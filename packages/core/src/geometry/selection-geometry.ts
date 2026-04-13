@@ -6,6 +6,7 @@ export interface SelectionGeometryRect {
   y: number
   width: number
   height: number
+  caretX: number
   position: CaretPosition
   lineIndex: number
   caretOffset: number
@@ -137,6 +138,7 @@ function buildLineRects(
       y: blockTop + lineIndex * lineHeight,
       width: Math.max(0, right - left),
       height: lineHeight,
+      caretX: boundaries[caretIndex]!,
       position: resolveCaretPosition(block, lineStartOffset + codeUnitBoundaries[caretIndex]!),
       lineIndex,
       caretOffset: lineStartOffset + codeUnitBoundaries[caretIndex]!
@@ -149,6 +151,7 @@ function buildLineRects(
       y: blockTop + lineIndex * lineHeight,
       width: layoutWidth,
       height: lineHeight,
+      caretX: 0,
       position: resolveCaretPosition(block, lineStartOffset),
       lineIndex,
       caretOffset: lineStartOffset
@@ -179,6 +182,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
             y: blockTop,
             width: options.blockWidth,
             height: options.lineHeight,
+            caretX: 0,
             position: resolveCaretPosition(block, 0),
             lineIndex: 0,
             caretOffset: 0

@@ -5,7 +5,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(import.meta.dirname, 'src/index.ts'),
-      fileName: 'index'
+      fileName: 'index',
+      formats: ['es']
     }
   },
   test: {
