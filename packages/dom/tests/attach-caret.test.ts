@@ -217,6 +217,136 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('settles a mutation-triggered refresh without rescheduling from overlay writes', () => {
+    installMeasureMock()
+
+    const rafCallbacks: FrameRequestCallback[] = []
+    rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      rafCallbacks.push(callback)
+      return rafCallbacks.length
+    })
+
+    type FakeObserverInstance = MutationObserver & {
+      callback: MutationCallback
+      target: Node | null
+    }
+    const activeObservers = new Set<FakeObserverInstance>()
+
+    class FakeMutationObserver implements MutationObserver {
+      readonly callback: MutationCallback
+      readonly disconnect: () => void
+      readonly observe: MutationObserver['observe']
+      readonly takeRecords: MutationObserver['takeRecords']
+      target: Node | null = null
+
+      constructor(callback: MutationCallback) {
+        this.callback = callback
+        this.disconnect = () => {
+          activeObservers.delete(this)
+          this.target = null
+        }
+        this.observe = (target: Node) => {
+          this.target = target
+          activeObservers.add(this)
+        }
+        this.takeRecords = () => []
+      }
+    }
+
+    const notifyObservers = (target: Node) => {
+      for (const observer of activeObservers) {
+        const observedTarget = observer.target
+        if (observedTarget !== null && (observedTarget === target || observedTarget.contains(target))) {
+          observer.callback([], observer)
+        }
+      }
+    }
+
+    const patchMutationMethod = <T extends object, K extends keyof T>(
+      prototype: T,
+      method: K,
+      notifyBefore = false
+    ) => {
+      const original = prototype[method]
+      ;(prototype as T & Record<K, (...args: never[]) => unknown>)[method] = function (...args: never[]) {
+        if (notifyBefore) {
+          notifyObservers(this as unknown as Node)
+        }
+
+        const result = Reflect.apply(original as (...params: never[]) => unknown, this, args)
+
+        if (!notifyBefore) {
+          notifyObservers(this as unknown as Node)
+        }
+
+        return result
+      }
+
+      return () => {
+        ;(prototype as T & Record<K, (...args: never[]) => unknown>)[method] = original
+      }
+    }
+
+    const restoreMutationMethods = [
+      patchMutationMethod(Node.prototype, 'appendChild'),
+      patchMutationMethod(Node.prototype, 'insertBefore'),
+      patchMutationMethod(Node.prototype, 'removeChild', true),
+      patchMutationMethod(Element.prototype, 'replaceChildren')
+    ]
+
+    vi.stubGlobal('MutationObserver', FakeMutationObserver as unknown as typeof MutationObserver)
+
+    let root: HTMLDivElement | null = null
+    let caret: ReturnType<typeof attachCaret> | null = null
+
+    try {
+      root = document.createElement('div')
+      root.innerHTML = '<p>Hello <strong>world</strong></p>'
+      document.body.appendChild(root)
+
+      caret = attachCaret({ root })
+      caret.mount()
+
+      const paragraph = root.querySelector('p')
+      if (!(paragraph instanceof HTMLElement)) {
+        throw new Error('Expected paragraph element')
+      }
+
+      paragraph.appendChild(document.createTextNode('!'))
+
+      expect(rafCallbacks).toHaveLength(1)
+
+      const flushRafs = (limit = 8) => {
+        let executed = 0
+
+        while (executed < limit && rafCallbacks.length > 0) {
+          const callback = rafCallbacks.shift()
+          if (callback === undefined) break
+
+          callback(performance.now())
+          executed += 1
+        }
+
+        return executed
+      }
+
+      expect(flushRafs()).toBe(1)
+      expect(rafCallbacks).toHaveLength(0)
+
+      caret.unmount()
+      root.remove()
+    } finally {
+      caret?.unmount()
+      root?.remove()
+
+      for (const restore of restoreMutationMethods) {
+        restore()
+      }
+
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('forces a relative host when inline position is static', () => {
     installMeasureMock()
 

@@ -217,11 +217,25 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   function refresh() {
-    readSnapshot()
-    if (snapshot !== null) {
-      commitSelection(selectionFromDocument(root, snapshot.model), false)
+    const observer = mutationObserver
+
+    observer?.disconnect()
+
+    try {
+      readSnapshot()
+      if (snapshot !== null) {
+        commitSelection(selectionFromDocument(root, snapshot.model), false)
+      }
+      render()
+    } finally {
+      if (mounted && mutationObserver === observer && observer !== null) {
+        observer.observe(root, {
+          subtree: true,
+          childList: true,
+          characterData: true
+        })
+      }
     }
-    render()
   }
 
   function commitSelection(nextSelection: CaretSelection | null, syncDom = true) {
