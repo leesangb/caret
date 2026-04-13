@@ -45,6 +45,33 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('falls back without mounting the overlay for rtl roots', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.dir = 'rtl'
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    expect(caret.supportState).toEqual({
+      supported: false,
+      reason: 'rtl-root'
+    })
+    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
+
+    caret.setCollapsedPosition({
+      path: [0, 0],
+      offset: 0
+    })
+    expect(caret.getSelection()).toBeNull()
+
+    caret.unmount()
+    root.remove()
+  })
+
   it('syncs selection from the DOM selection object', () => {
     installMeasureMock()
 

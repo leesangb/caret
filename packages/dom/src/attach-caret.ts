@@ -6,6 +6,7 @@ import {
   toDOMRange,
   type CaretPosition,
   type CaretSelection,
+  type CaretSupportState,
   type DocumentModel,
   type SelectionGeometryBlock
 } from '@caret/core'
@@ -19,6 +20,7 @@ export interface AttachCaretOptions {
 }
 
 export interface AttachCaretController {
+  readonly supportState: CaretSupportState
   mount(): void
   unmount(): void
   refresh(): void
@@ -131,7 +133,58 @@ function readModelWithoutOverlay(root: HTMLElement, overlayRoot: HTMLElement): D
   }
 }
 
+function getSupportState(root: HTMLElement): CaretSupportState {
+  const view = root.ownerDocument?.defaultView ?? globalThis.window
+  const computedDirection = view?.getComputedStyle(root).direction ?? root.dir
+
+  if (
+    computedDirection === 'rtl' ||
+    root.dir === 'rtl' ||
+    root.getAttribute('dir') === 'rtl'
+  ) {
+    return {
+      supported: false,
+      reason: 'rtl-root'
+    }
+  }
+
+  return {
+    supported: true
+  }
+}
+
 export function attachCaret({ root }: AttachCaretOptions): AttachCaretController {
+  const supportState = getSupportState(root)
+
+  if (!supportState.supported) {
+    return {
+      supportState,
+      mount() {},
+      unmount() {},
+      refresh() {},
+      getSelection() {
+        return null
+      },
+      setSelection(_selection: CaretSelection) {},
+      setCollapsedPosition(_position: CaretPosition) {},
+      setSelectionFromDOM() {
+        return null
+      },
+      toDOMRange(selection: CaretSelection) {
+        return toDOMRange(createDocumentModel(root), selection)
+      },
+      fromDOMRange(range: Range) {
+        return fromDOMRange(createDocumentModel(root), range)
+      },
+      hitTest(_point: { x: number; y: number }) {
+        return null
+      },
+      on(_event: 'selectionchange', _listener: SelectionChangeListener) {
+        return () => undefined
+      }
+    }
+  }
+
   const overlay = createOverlayRenderer(root)
   const listeners = new Set<SelectionChangeListener>()
   let snapshot: Snapshot | null = null
@@ -315,6 +368,7 @@ export function attachCaret({ root }: AttachCaretOptions): AttachCaretController
   }
 
   return {
+    supportState,
     mount,
     unmount,
     refresh,

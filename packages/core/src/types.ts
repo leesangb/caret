@@ -1,5 +1,14 @@
 export type CaretAffinity = 'forward' | 'backward'
 
+export type CaretSupportState =
+  | {
+      supported: true
+    }
+  | {
+      supported: false
+      reason: 'rtl-root'
+    }
+
 export interface CaretPosition {
   path: number[]
   offset: number
