@@ -28,6 +28,21 @@ function findRunByPath(model: DocumentModel, path: number[]) {
   return null
 }
 
+function resolveNodeFromPath(root: Node, path: number[]): Node {
+  let current: Node = root
+
+  for (const index of path) {
+    const next = current.childNodes[index]
+    if (!next) {
+      throw new Error('Unknown caret position')
+    }
+
+    current = next
+  }
+
+  return current
+}
+
 function toCaretPosition(model: DocumentModel, node: Node, offset: number): CaretPosition {
   const path = toNodePath(node, model.root)
   const run = findRunByPath(model, path)
@@ -40,14 +55,12 @@ function toCaretPosition(model: DocumentModel, node: Node, offset: number): Care
 }
 
 function resolvePosition(model: DocumentModel, position: CaretPosition): { node: Node; offset: number } {
+  const node = resolveNodeFromPath(model.root, position.path)
   const run = findRunByPath(model, position.path)
-  if (!run) {
-    throw new Error('Unknown caret position')
-  }
 
   return {
-    node: run.node,
-    offset: run.placeholder ? 0 : position.offset
+    node,
+    offset: run?.placeholder ? 0 : position.offset
   }
 }
 
@@ -59,7 +72,7 @@ export function fromDOMRange(model: DocumentModel, range: Range): CaretSelection
 }
 
 export function toDOMRange(model: DocumentModel, selection: CaretSelection): Range {
-  const range = document.createRange()
+  const range = model.root.ownerDocument?.createRange() ?? document.createRange()
   const [start, end] =
     comparePositions(selection.anchor, selection.focus) <= 0
       ? [selection.anchor, selection.focus]

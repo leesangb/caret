@@ -28,6 +28,36 @@ describe('DOM range conversions', () => {
     expect(roundTrip.endOffset).toBe(5)
   })
 
+  it('round-trips a collapsed caret on an element container boundary', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello <strong>world</strong></p>'
+    const model = createDocumentModel(root)
+    const paragraph = root.querySelector('p')
+
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('Expected paragraph element')
+    }
+
+    const range = document.createRange()
+    range.setStart(paragraph, 1)
+    range.collapse(true)
+
+    const selection = fromDOMRange(model, range)
+    const roundTrip = toDOMRange(model, selection)
+
+    expect(selection.anchor).toEqual({
+      path: model.blocks[0].path,
+      offset: 1
+    })
+    expect(selection.focus).toEqual({
+      path: model.blocks[0].path,
+      offset: 1
+    })
+    expect(roundTrip.collapsed).toBe(true)
+    expect(roundTrip.startContainer).toBe(paragraph)
+    expect(roundTrip.startOffset).toBe(1)
+  })
+
   it.each([
     ['empty paragraph', '<p></p>'],
     ['br-only block', '<p><br></p>']
