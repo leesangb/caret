@@ -130,9 +130,16 @@ export function Editor() {
           caretWidth: 3,
           caretColor: '#0f172a',
           caretRadius: 3,
-          selectionBackground: 'rgba(37, 99, 235, 0.2)',
-          selectionOutline: '1px solid rgba(37, 99, 235, 0.4)',
-          selectionRadius: 8,
+          selection: {
+            background: 'rgba(37, 99, 235, 0.2)',
+            outline: '1px solid rgba(37, 99, 235, 0.4)',
+            radius: 8,
+            shape: {
+              kind: 'pill',
+              paddingX: 4,
+              paddingY: 2
+            }
+          },
           classNames: {
             root: 'styled-overlay',
             caret: 'styled-overlay__caret',
@@ -143,7 +150,7 @@ export function Editor() {
     >
       <div className="example-editor--styled" contentEditable suppressContentEditableWarning>
         <p>A thinner caret can feel more editor-like.</p>
-        <p>Use renderer options for radius, color, and outline without replacing the renderer.</p>
+        <p>Use renderer options for pill shapes, radius, color, and outline without replacing the renderer.</p>
       </div>
     </CaretRoot>
   )
@@ -233,9 +240,17 @@ For most styling, prefer renderer options:
 - `caretWidth`
 - `caretColor`
 - `caretRadius`
-- `selectionBackground`
-- `selectionOutline`
-- `selectionRadius`
+- `selection.background`
+- `selection.outline`
+- `selection.radius`
+- `selection.shape`
+
+`selection.shape` currently supports:
+
+- `kind: 'rect' | 'pill'`
+- `paddingX`
+- `paddingY`
+- `radius`
 
 ### Style With `createOverlayRenderer`
 
@@ -249,9 +264,16 @@ const caret = attachCaret({
       caretWidth: 3,
       caretColor: '#111827',
       caretRadius: 2,
-      selectionBackground: 'rgba(59, 130, 246, 0.22)',
-      selectionOutline: '1px solid rgba(59, 130, 246, 0.32)',
-      selectionRadius: 8,
+      selection: {
+        background: 'rgba(59, 130, 246, 0.22)',
+        outline: '1px solid rgba(59, 130, 246, 0.32)',
+        radius: 8,
+        shape: {
+          kind: 'pill',
+          paddingX: 4,
+          paddingY: 2
+        }
+      },
       classNames: {
         root: 'caret-overlay',
         caret: 'caret-overlay__caret',
@@ -268,6 +290,22 @@ caret.mount()
 .caret-overlay__selection {
   box-shadow: 0 4px 10px rgba(59, 130, 246, 0.12);
 }
+```
+
+### Build A Custom SVG/Canvas Shape
+
+If you want to keep your own renderer, but reuse the built-in multiline shape helper:
+
+```ts
+import { buildSelectionShapePath } from '@caret/dom'
+
+const shape = buildSelectionShapePath(visualState.selectionRects, {
+  kind: 'pill',
+  paddingX: 4,
+  paddingY: 2
+})
+
+path.setAttribute('d', shape.path)
 ```
 
 ### React Styling

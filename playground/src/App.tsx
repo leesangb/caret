@@ -16,9 +16,16 @@ function createStyledRenderer(host: HTMLElement) {
     caretWidth: 3,
     caretColor: '#0f172a',
     caretRadius: 3,
-    selectionBackground: 'rgba(37, 99, 235, 0.2)',
-    selectionOutline: '1px solid rgba(37, 99, 235, 0.4)',
-    selectionRadius: 8,
+    selection: {
+      background: 'rgba(37, 99, 235, 0.2)',
+      outline: '1px solid rgba(37, 99, 235, 0.4)',
+      radius: 8,
+      shape: {
+        kind: 'pill',
+        paddingX: 4,
+        paddingY: 2
+      }
+    },
     classNames: {
       root: 'styled-overlay',
       caret: 'styled-overlay__caret',
@@ -145,12 +152,12 @@ export function App() {
           <ExampleCard
             id="styled"
             title="CSS Styled Overlay"
-            description="Same overlay renderer, but styled with appearance options and optional classes."
+            description="Same overlay renderer, but styled with appearance options and a pill selection shape."
             createRenderer={createStyledRenderer}
             editorClassName="example-editor--styled"
           >
             <p>A thinner caret can feel more editor-like.</p>
-            <p>Use renderer options for radius, color, and outline without replacing the renderer.</p>
+            <p>Use renderer options for pill shapes, radius, color, and outline without replacing the renderer.</p>
           </ExampleCard>
 
           <ExampleCard
