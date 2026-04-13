@@ -16,7 +16,8 @@ export interface NormalizedRun {
   text: string
   start: number
   end: number
-  node: Text
+  node: Node
+  placeholder?: true
 }
 
 export interface NormalizedBlock {

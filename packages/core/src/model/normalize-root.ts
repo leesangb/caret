@@ -9,6 +9,7 @@ function isBlockElement(node: Element): node is HTMLElement {
 
 interface BlockSource {
   element: HTMLElement
+  path: number[]
   nodes: Node[]
 }
 
@@ -18,14 +19,22 @@ function collectBlockSources(root: HTMLElement): BlockSource[] {
 
   const flushSynthetic = () => {
     if (syntheticNodes.length === 0) return
-    sources.push({ element: root, nodes: syntheticNodes })
+    sources.push({
+      element: root,
+      path: toNodePath(syntheticNodes[0], root),
+      nodes: syntheticNodes
+    })
     syntheticNodes = []
   }
 
   for (const node of Array.from(root.childNodes)) {
     if (node.nodeType === Node.ELEMENT_NODE && isBlockElement(node as Element)) {
       flushSynthetic()
-      sources.push({ element: node as HTMLElement, nodes: [node] })
+      sources.push({
+        element: node as HTMLElement,
+        path: toNodePath(node, root),
+        nodes: [node]
+      })
       continue
     }
 
@@ -34,7 +43,9 @@ function collectBlockSources(root: HTMLElement): BlockSource[] {
 
   flushSynthetic()
 
-  return sources.length > 0 ? sources : [{ element: root, nodes: [root] }]
+  return sources.length > 0
+    ? sources
+    : [{ element: root, path: toNodePath(root, root), nodes: [root] }]
 }
 
 function collectTextNodes(node: Node): Text[] {
@@ -72,6 +83,17 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
     }
   }
 
+  if (runs.length === 0) {
+    runs.push({
+      path: source.path,
+      text: '',
+      start: 0,
+      end: 0,
+      node: source.element,
+      placeholder: true
+    })
+  }
+
   return runs
 }
 
@@ -80,7 +102,7 @@ export function createDocumentModel(root: HTMLElement): DocumentModel {
     const runs = collectRuns(source, root)
 
     return {
-      path: toNodePath(source.element, root),
+      path: source.path,
       text: runs.map((run) => run.text).join(''),
       runs,
       element: source.element
