@@ -67,6 +67,42 @@ function collectTextNodes(node: Node): Text[] {
   return nodes
 }
 
+function getTextHost(root: HTMLElement, node: Node): HTMLElement {
+  if (node instanceof HTMLElement) {
+    return node
+  }
+
+  return node.parentElement ?? root
+}
+
+function getCanvasFont(element: HTMLElement) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  if (computed === null || computed === undefined) {
+    return undefined
+  }
+
+  if (computed.font.length > 0) {
+    return computed.font
+  }
+
+  const size = computed.fontSize || '16px'
+  const family = computed.fontFamily || 'sans-serif'
+  const style = computed.fontStyle && computed.fontStyle !== 'normal' ? `${computed.fontStyle} ` : ''
+  const variant = computed.fontVariant && computed.fontVariant !== 'normal' ? `${computed.fontVariant} ` : ''
+  const weight = computed.fontWeight && computed.fontWeight !== 'normal' ? `${computed.fontWeight} ` : ''
+
+  return `${style}${variant}${weight}${size} ${family}`.trim()
+}
+
+function getLineHeight(element: HTMLElement) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const parsed = Number.parseFloat(computed?.lineHeight ?? '')
+
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
   const runs: NormalizedRun[] = []
   let start = 0
@@ -81,7 +117,8 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
         text,
         start,
         end: start + text.length,
-        node: textNode
+        node: textNode,
+        font: getCanvasFont(getTextHost(root, textNode))
       })
       start += text.length
     }
@@ -109,7 +146,8 @@ export function createDocumentModel(root: HTMLElement): DocumentModel {
       path: source.path,
       text: runs.map((run) => run.text).join(''),
       runs,
-      element: source.element
+      element: source.element,
+      lineHeight: getLineHeight(source.element)
     }
   })
 

@@ -26,6 +26,7 @@ export interface NormalizedRun {
   start: number
   end: number
   node: Node
+  font?: string
   placeholder?: true
 }
 
@@ -34,6 +35,7 @@ export interface NormalizedBlock {
   text: string
   runs: NormalizedRun[]
   element: HTMLElement
+  lineHeight?: number
 }
 
 export interface DocumentModel {

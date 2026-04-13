@@ -194,4 +194,45 @@ describe('deriveVisualState', () => {
       }
     ])
   })
+
+  it('uses run-specific font metrics when inline runs have different fonts', () => {
+    const context = {
+      font: '',
+      measureText(this: CanvasRenderingContext2D, text: string) {
+        const unitWidth = this.font.includes('32px') ? 20 : 10
+        return { width: text.length * unitWidth }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>Hi</span><span>!</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const firstText = text[0]?.firstChild
+    const secondText = text[1]?.firstChild
+    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string }).font = '16px serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '32px serif'
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 24,
+      font: '16px serif'
+    })
+
+    const selection = getSelection(root, [secondText, 1], [secondText, 1])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.caret).toEqual({
+      x: 40,
+      y: 0,
+      height: 24
+    })
+  })
 })

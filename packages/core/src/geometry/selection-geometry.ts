@@ -1,4 +1,15 @@
-import { layoutWithLines, prepareWithSegments } from '@chenglou/pretext'
+import {
+  layoutWithLines,
+  materializeLineRange,
+  prepareWithSegments,
+  type LayoutCursor,
+  type PreparedTextWithSegments
+} from '@chenglou/pretext'
+import {
+  layoutNextRichInlineLineRange,
+  materializeRichInlineLineRange,
+  prepareRichInline
+} from '@chenglou/pretext/rich-inline'
 import type { CaretPosition, DocumentModel, NormalizedBlock } from '../types'
 
 export interface SelectionGeometryRect {
@@ -24,6 +35,11 @@ export interface GeometryOptions {
   charWidth?: number
 }
 
+const EMPTY_CURSOR: LayoutCursor = {
+  segmentIndex: 0,
+  graphemeIndex: 0
+}
+
 function createMeasureContext(font: string): CanvasRenderingContext2D | null {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -31,6 +47,20 @@ function createMeasureContext(font: string): CanvasRenderingContext2D | null {
   if (context === null) return null
 
   context.font = font
+  return context
+}
+
+function getMeasureContext(
+  cache: Map<string, CanvasRenderingContext2D | null>,
+  font: string
+) {
+  const cached = cache.get(font)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  const context = createMeasureContext(font)
+  cache.set(font, context)
   return context
 }
 
@@ -161,17 +191,220 @@ function buildLineRects(
   return rects
 }
 
+function trimBoundaryWhitespace(text: string) {
+  const leadingMatch = text.match(/^[ \t\n\f\r]+/)
+  const trailingMatch = text.match(/[ \t\n\f\r]+$/)
+
+  return {
+    leadingTrim: leadingMatch?.[0].length ?? 0,
+    trailingTrim: trailingMatch?.[0].length ?? 0,
+    trimmedText: text
+      .replace(/^[ \t\n\f\r]+/, '')
+      .replace(/[ \t\n\f\r]+$/, '')
+  }
+}
+
+function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: LayoutCursor) {
+  if (end.segmentIndex === 0 && end.graphemeIndex === 0) {
+    return 0
+  }
+
+  return materializeLineRange(prepared, {
+    start: EMPTY_CURSOR,
+    end
+  }).text.length
+}
+
+function buildLineRectsFromBoundaries(
+  block: NormalizedBlock,
+  blockTop: number,
+  lineHeight: number,
+  lineIndex: number,
+  lineWidth: number,
+  boundaries: Array<{
+    caretX: number
+    caretOffset: number
+  }>
+): SelectionGeometryRect[] {
+  if (boundaries.length === 0) {
+    return [
+      {
+        x: 0,
+        y: blockTop + lineIndex * lineHeight,
+        width: lineWidth,
+        height: lineHeight,
+        caretX: 0,
+        position: resolveCaretPosition(block, 0),
+        lineIndex,
+        caretOffset: 0
+      }
+    ]
+  }
+
+  return boundaries.map((boundary, index) => {
+    const previous = boundaries[index - 1]
+    const next = boundaries[index + 1]
+    const left = previous === undefined ? 0 : (previous.caretX + boundary.caretX) / 2
+    const right = next === undefined ? Math.max(lineWidth, boundary.caretX) : (boundary.caretX + next.caretX) / 2
+
+    return {
+      x: left,
+      y: blockTop + lineIndex * lineHeight,
+      width: Math.max(0, right - left),
+      height: lineHeight,
+      caretX: boundary.caretX,
+      position: resolveCaretPosition(block, boundary.caretOffset),
+      lineIndex,
+      caretOffset: boundary.caretOffset
+    }
+  })
+}
+
+function shouldUseRichInline(block: NormalizedBlock, fallbackFont: string) {
+  const fonts = new Set(
+    block.runs
+      .filter((run) => !run.placeholder && run.text.length > 0)
+      .map((run) => run.font ?? fallbackFont)
+  )
+
+  return fonts.size > 1
+}
+
+function buildRichInlineRects(
+  block: NormalizedBlock,
+  blockTop: number,
+  options: GeometryOptions,
+  fallbackWidth: number,
+  contextCache: Map<string, CanvasRenderingContext2D | null>
+) {
+  const richItems = block.runs
+    .filter((run) => !run.placeholder)
+    .map((run) => ({
+      text: run.text,
+      font: run.font ?? options.font
+    }))
+
+  const flow = prepareRichInline(richItems)
+  const runPrepared = block.runs
+    .filter((run) => !run.placeholder)
+    .map((run) => {
+      const font = run.font ?? options.font
+      const trimmed = trimBoundaryWhitespace(run.text)
+
+      return {
+        run,
+        font,
+        leadingTrim: trimmed.leadingTrim,
+        prepared: prepareWithSegments(trimmed.trimmedText, font)
+      }
+    })
+
+  const rects: SelectionGeometryRect[] = []
+  let cursor: Parameters<typeof layoutNextRichInlineLineRange>[2] | undefined
+  let lineIndex = 0
+
+  while (true) {
+    const range = layoutNextRichInlineLineRange(flow, options.blockWidth, cursor)
+    if (range === null) {
+      break
+    }
+
+    const line = materializeRichInlineLineRange(flow, range)
+    const boundaries: Array<{ caretX: number; caretOffset: number }> = []
+    let x = 0
+
+    for (const fragment of line.fragments) {
+      const preparedRun = runPrepared[fragment.itemIndex]
+      if (preparedRun === undefined) {
+        continue
+      }
+
+      x += fragment.gapBefore
+      const units = Array.from(fragment.text)
+      const boundariesInFragment = buildBoundaryWidths(
+        getMeasureContext(contextCache, preparedRun.font),
+        units,
+        fallbackWidth
+      )
+      const codeUnitBoundaries = [0]
+      let codeUnitTotal = 0
+
+      for (const unit of units) {
+        codeUnitTotal += unit.length
+        codeUnitBoundaries.push(codeUnitTotal)
+      }
+
+      const fragmentStart = getCursorCodeUnitOffset(preparedRun.prepared, fragment.start)
+      const absoluteStart = preparedRun.run.start + preparedRun.leadingTrim + fragmentStart
+
+      for (let caretIndex = 0; caretIndex < boundariesInFragment.length; caretIndex += 1) {
+        boundaries.push({
+          caretX: x + boundariesInFragment[caretIndex]!,
+          caretOffset: absoluteStart + codeUnitBoundaries[caretIndex]!
+        })
+      }
+
+      x += fragment.occupiedWidth
+    }
+
+    rects.push(
+      ...buildLineRectsFromBoundaries(
+        block,
+        blockTop,
+        block.lineHeight ?? options.lineHeight,
+        lineIndex,
+        line.width,
+        boundaries
+      )
+    )
+
+    cursor = line.end
+    lineIndex += 1
+  }
+
+  if (rects.length === 0) {
+    rects.push({
+      x: 0,
+      y: blockTop,
+      width: options.blockWidth,
+      height: block.lineHeight ?? options.lineHeight,
+      caretX: 0,
+      position: resolveCaretPosition(block, 0),
+      lineIndex: 0,
+      caretOffset: 0
+    })
+  }
+
+  return {
+    rects,
+    lineCount: Math.max(1, lineIndex)
+  }
+}
+
 export function createSelectionGeometry(model: DocumentModel, options: GeometryOptions): SelectionGeometryBlock[] {
   const blocks: SelectionGeometryBlock[] = []
   let blockTop = 0
   const fallbackWidth = options.charWidth ?? 0
   const preparedByText = new Map<string, ReturnType<typeof prepareWithSegments>>()
+  const contextCache = new Map<string, CanvasRenderingContext2D | null>()
 
   for (let blockIndex = 0; blockIndex < model.blocks.length; blockIndex += 1) {
     const block = model.blocks[blockIndex]
+    const blockLineHeight = block.lineHeight ?? options.lineHeight
+
+    if (shouldUseRichInline(block, options.font)) {
+      const rich = buildRichInlineRects(block, blockTop, options, fallbackWidth, contextCache)
+      blocks.push({
+        blockIndex,
+        rects: rich.rects
+      })
+      blockTop += rich.lineCount * blockLineHeight
+      continue
+    }
+
     const prepared = preparedByText.get(block.text) ?? prepareWithSegments(block.text, options.font)
     preparedByText.set(block.text, prepared)
-    const layout = layoutWithLines(prepared, options.blockWidth, options.lineHeight)
+    const layout = layoutWithLines(prepared, options.blockWidth, blockLineHeight)
 
     if (layout.lineCount === 0) {
       blocks.push({
@@ -181,7 +414,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
             x: 0,
             y: blockTop,
             width: options.blockWidth,
-            height: options.lineHeight,
+            height: blockLineHeight,
             caretX: 0,
             position: resolveCaretPosition(block, 0),
             lineIndex: 0,
@@ -190,7 +423,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
         ]
       })
 
-      blockTop += options.lineHeight
+      blockTop += blockLineHeight
       continue
     }
 
@@ -204,7 +437,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
           block,
           blockTop,
           options.blockWidth,
-          options.lineHeight,
+          blockLineHeight,
           options.font,
           fallbackWidth,
           lineIndex,
@@ -220,7 +453,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
       rects
     })
 
-    blockTop += layout.lineCount * options.lineHeight
+    blockTop += layout.lineCount * blockLineHeight
   }
 
   return blocks

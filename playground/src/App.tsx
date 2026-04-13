@@ -220,6 +220,27 @@ export function App() {
           </ExampleCard>
 
           <ExampleCard
+            id="mixed-typography"
+            title="Mixed Typography"
+            description="Validation case for mixed fonts, font sizes, inline emoji, and varied emphasis."
+            editorClassName="example-editor--mixed"
+          >
+            <p>
+              <span data-mixed-segment="intro">Studio </span>
+              <span className="mixed-type mixed-type--serif" data-mixed-segment="serif">Serif</span>
+              <span data-mixed-segment="middle"> meets </span>
+              <span className="mixed-type mixed-type--mono" data-mixed-segment="mono">mono()</span>
+              <span data-mixed-segment="emoji-start"> with ✨ </span>
+              <span className="mixed-type mixed-type--display" data-mixed-segment="display">Loud</span>
+              <span data-mixed-segment="emoji-end"> emoji 😄</span>
+            </p>
+            <p>
+              <span className="mixed-type mixed-type--large" data-mixed-segment="large">Big beats</span>
+              <span data-mixed-segment="tail"> small details and mixed baseline hops.</span>
+            </p>
+          </ExampleCard>
+
+          <ExampleCard
             id="styled"
             title="CSS Styled Overlay"
             description="Same overlay renderer, but styled with appearance options and a pill selection shape."
