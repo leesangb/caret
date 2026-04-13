@@ -11,6 +11,7 @@ interface BlockSource {
   element: HTMLElement
   path: number[]
   nodes: Node[]
+  placeholderNode: Node
 }
 
 function collectBlockSources(root: HTMLElement): BlockSource[] {
@@ -19,10 +20,12 @@ function collectBlockSources(root: HTMLElement): BlockSource[] {
 
   const flushSynthetic = () => {
     if (syntheticNodes.length === 0) return
+    const placeholderNode = syntheticNodes[0]
     sources.push({
       element: root,
-      path: toNodePath(syntheticNodes[0], root),
-      nodes: syntheticNodes
+      path: toNodePath(placeholderNode, root),
+      nodes: syntheticNodes,
+      placeholderNode
     })
     syntheticNodes = []
   }
@@ -33,7 +36,8 @@ function collectBlockSources(root: HTMLElement): BlockSource[] {
       sources.push({
         element: node as HTMLElement,
         path: toNodePath(node, root),
-        nodes: [node]
+        nodes: [node],
+        placeholderNode: node
       })
       continue
     }
@@ -45,7 +49,7 @@ function collectBlockSources(root: HTMLElement): BlockSource[] {
 
   return sources.length > 0
     ? sources
-    : [{ element: root, path: toNodePath(root, root), nodes: [root] }]
+    : [{ element: root, path: toNodePath(root, root), nodes: [root], placeholderNode: root }]
 }
 
 function collectTextNodes(node: Node): Text[] {
@@ -89,7 +93,7 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
       text: '',
       start: 0,
       end: 0,
-      node: source.element,
+      node: source.placeholderNode,
       placeholder: true
     })
   }

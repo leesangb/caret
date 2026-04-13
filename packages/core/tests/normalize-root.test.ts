@@ -56,6 +56,20 @@ describe('createDocumentModel', () => {
     expect(model.blocks[0].runs[0].node).toBe(model.blocks[0].element)
   })
 
+  it('keeps synthetic empty root-backed segments path and node consistent', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<span></span>'
+
+    const model = createDocumentModel(root)
+
+    expect(model.blocks).toHaveLength(1)
+    expect(model.blocks[0].text).toBe('')
+    expect(model.blocks[0].runs).toHaveLength(1)
+    expect(model.blocks[0].runs[0].placeholder).toBe(true)
+    expect(model.blocks[0].runs[0].node).toBe(root.firstElementChild)
+    expect(model.blocks[0].runs[0].path).toEqual(model.blocks[0].path)
+  })
+
   it('does not duplicate descendant text across nested blocks', () => {
     const root = document.createElement('div')
     root.innerHTML = '<div><p>x</p></div>'
