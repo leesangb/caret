@@ -1,23 +1,107 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDocumentModel } from '../src/model/normalize-root'
 import { createSelectionGeometry } from '../src/geometry/selection-geometry'
 import { hitTest } from '../src/hit-test/hit-test'
 
+let getContextSpy: ReturnType<typeof vi.spyOn> | undefined
+
+function installMeasureMock() {
+  const context = {
+    font: '',
+    measureText: (text: string) => ({ width: text.length * 10 })
+  } as CanvasRenderingContext2D
+
+  getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+}
+
+afterEach(() => {
+  getContextSpy?.mockRestore()
+  getContextSpy = undefined
+})
+
 describe('selection geometry and hit testing', () => {
   it('maps x coordinates into text offsets for a single block', () => {
+    installMeasureMock()
+
     const root = document.createElement('div')
     root.innerHTML = '<p>Hello world</p>'
     const model = createDocumentModel(root)
 
     const boxes = createSelectionGeometry(model, {
       blockWidth: 220,
-      charWidth: 10,
-      lineHeight: 20
+      lineHeight: 20,
+      font: '16px sans-serif'
     })
 
-    const hit = hitTest(model, boxes, { x: 55, y: 10 })
+    const hit = hitTest(model, boxes, { x: 54, y: 10 })
 
-    expect(boxes[0].rects[0].width).toBeGreaterThan(0)
+    expect(boxes[0].rects.length).toBeGreaterThan(0)
     expect(hit?.offset).toBe(5)
+  })
+
+  it('returns offset 0 for an empty block', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p></p>'
+    const model = createDocumentModel(root)
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const hit = hitTest(model, boxes, { x: 50, y: 10 })
+
+    expect(hit?.offset).toBe(0)
+  })
+
+  it('returns the end of the line when clicking after the last character', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    const model = createDocumentModel(root)
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 60,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const lineEndZone = boxes[0].rects
+      .filter((rect) => rect.lineIndex === 0)
+      .reduce((max, rect) => Math.max(max, rect.caretOffset), 0)
+
+    const hit = hitTest(model, boxes, { x: 59, y: 10 })
+
+    expect(hit?.offset).toBe(lineEndZone)
+  })
+
+  it('wraps text according to pretext line breaks', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world from pretext</p>'
+    const model = createDocumentModel(root)
+
+    const wideBoxes = createSelectionGeometry(model, {
+      blockWidth: 260,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+    const narrowBoxes = createSelectionGeometry(model, {
+      blockWidth: 60,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const wideLineCount = new Set(wideBoxes[0].rects.map((rect) => rect.y)).size
+    const narrowLineCount = new Set(narrowBoxes[0].rects.map((rect) => rect.y)).size
+
+    expect(narrowLineCount).toBeGreaterThan(wideLineCount)
+    expect(hitTest(model, wideBoxes, { x: 5, y: 30 })).toBeNull()
+    expect(hitTest(model, narrowBoxes, { x: 5, y: 30 })?.offset).toBeGreaterThan(0)
   })
 })
