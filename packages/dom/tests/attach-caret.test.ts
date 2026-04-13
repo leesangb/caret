@@ -45,6 +45,32 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('suppresses native selection styles inside the mounted root and restores them on unmount', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const caret = attachCaret({ root })
+    caret.mount()
+
+    const scope = root.getAttribute('data-caret-selection-scope')
+    const style = document.head.querySelector('[data-caret-selection-style]')
+
+    expect(scope).toBeTruthy()
+    expect(style).toBeInstanceOf(HTMLStyleElement)
+    expect((style as HTMLStyleElement).textContent).toContain('::selection')
+    expect((style as HTMLStyleElement).textContent).toContain(scope as string)
+
+    caret.unmount()
+
+    expect(root.hasAttribute('data-caret-selection-scope')).toBe(false)
+    expect(document.head.querySelector('[data-caret-selection-style]')).toBeNull()
+
+    root.remove()
+  })
+
   it('uses a custom renderer factory for caret and selection visuals', () => {
     installMeasureMock()
 
@@ -126,6 +152,70 @@ describe('attachCaret', () => {
     expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
       x: 60,
       y: 0,
+      height: 20
+    })
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('offsets visuals by the rendered block position inside the root', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.style.padding = '18px 20px'
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    const paragraph = root.querySelector('p')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('Expected paragraph element')
+    }
+
+    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 220,
+      bottom: 100,
+      width: 220,
+      height: 100,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+    vi.spyOn(paragraph, 'getBoundingClientRect').mockReturnValue({
+      x: 20,
+      y: 18,
+      left: 20,
+      top: 18,
+      right: 130,
+      bottom: 38,
+      width: 110,
+      height: 20,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect)
+
+    const render = vi.fn()
+    const createRenderer = vi.fn((host: HTMLElement) => ({
+      root: host.ownerDocument.createElement('div'),
+      render,
+      destroy: vi.fn()
+    }))
+
+    const caret = attachCaret({ root, createRenderer })
+    caret.mount()
+    caret.setCollapsedPosition({
+      path: [0, 0],
+      offset: 2
+    })
+
+    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
+      x: 40,
+      y: 18,
       height: 20
     })
 
@@ -224,6 +314,7 @@ describe('attachCaret', () => {
       reason: 'rtl-root'
     })
     expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
+    expect(root.hasAttribute('data-caret-selection-scope')).toBe(false)
     expect(caret.getSelection()).toBeNull()
 
     caret.unmount()

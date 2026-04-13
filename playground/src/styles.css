@@ -153,6 +153,10 @@ select {
   margin-bottom: 0;
 }
 
+.example-editor--narrow {
+  max-width: 180px;
+}
+
 .example-editor--styled .styled-overlay__caret {
   --caret-color: #0f172a;
   --caret-radius: 3px;

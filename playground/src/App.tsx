@@ -128,6 +128,16 @@ export function App() {
           </ExampleCard>
 
           <ExampleCard
+            id="multiline"
+            title="Multiline Selection"
+            description="Wrapped selections stay aligned line by line inside a narrow editor."
+            editorClassName="example-editor--narrow"
+          >
+            <p>This example forces wrapping so you can verify multi-line selection painting.</p>
+            <p>The selection overlay should break into separate rows and still align to text.</p>
+          </ExampleCard>
+
+          <ExampleCard
             id="styled"
             title="CSS Styled Overlay"
             description="Same overlay renderer, but styled with classes and CSS variables."

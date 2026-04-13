@@ -43,16 +43,22 @@ test('captures README example screenshots', async ({ page }) => {
   await page.goto('/')
 
   const basic = page.locator('[data-readme-example="basic"]')
+  const multiline = page.locator('[data-readme-example="multiline"]')
   const styled = page.locator('[data-readme-example="styled"]')
   const custom = page.locator('[data-readme-example="custom"]')
 
   await expect(basic).toBeVisible()
+  await expect(multiline).toBeVisible()
   await expect(styled).toBeVisible()
   await expect(custom).toBeVisible()
 
   await setParagraphSelection(page, 'basic', 0, 0, 0, 18)
   await expect(basic.locator('[data-caret-overlay-part="selection"]')).toBeVisible()
   await basic.screenshot({ path: 'assets/readme/basic-example.png' })
+
+  await setParagraphSelection(page, 'multiline', 0, 0, 0, 50)
+  await expect(multiline.locator('[data-caret-overlay-part="selection"]').first()).toBeVisible()
+  await multiline.screenshot({ path: 'assets/readme/multiline-example.png' })
 
   await setParagraphSelection(page, 'styled', 1, 12, 1, 12)
   await expect(styled.locator('[data-caret-overlay-part="caret"]')).toBeVisible()

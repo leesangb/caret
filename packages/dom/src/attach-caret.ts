@@ -44,6 +44,27 @@ interface Snapshot {
   geometry: SelectionGeometryBlock[]
 }
 
+let selectionScopeCounter = 0
+
+function parsePixelValue(value: string | null | undefined) {
+  const parsed = Number.parseFloat(value ?? '')
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function getBoxMetrics(element: HTMLElement) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+
+  return {
+    paddingLeft: parsePixelValue(computed?.paddingLeft),
+    paddingTop: parsePixelValue(computed?.paddingTop),
+    paddingRight: parsePixelValue(computed?.paddingRight),
+    borderLeft: parsePixelValue(computed?.borderLeftWidth),
+    borderTop: parsePixelValue(computed?.borderTopWidth),
+    borderRight: parsePixelValue(computed?.borderRightWidth)
+  }
+}
+
 function comparePaths(left: number[], right: number[]): number {
   for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
     if (left[index] !== right[index]) {
@@ -87,13 +108,57 @@ function getGeometryOptions(root: HTMLElement) {
   const computed = view ? view.getComputedStyle(root) : null
   const lineHeight = Number.parseFloat(computed?.lineHeight ?? '') || 20
   const font = computed?.font || '16px sans-serif'
-  const blockWidth = Math.max(1, Math.round(root.getBoundingClientRect().width || root.clientWidth || 800))
+  const rootRectWidth = root.getBoundingClientRect().width
+  const { paddingLeft, paddingRight, borderLeft, borderRight } = getBoxMetrics(root)
+  const layoutWidth = root.clientWidth > 0
+    ? root.clientWidth - paddingLeft - paddingRight
+    : rootRectWidth - borderLeft - borderRight - paddingLeft - paddingRight
+  const blockWidth = Math.max(1, Math.round(layoutWidth || 800))
 
   return {
     blockWidth,
     lineHeight,
     font
   }
+}
+
+function positionGeometry(
+  root: HTMLElement,
+  model: DocumentModel,
+  geometry: SelectionGeometryBlock[]
+): SelectionGeometryBlock[] {
+  const rootRect = root.getBoundingClientRect()
+  const rootMetrics = getBoxMetrics(root)
+  const rootOriginX = rootRect.left + rootMetrics.borderLeft
+  const rootOriginY = rootRect.top + rootMetrics.borderTop
+
+  return geometry.map((blockGeometry) => {
+    const block = model.blocks[blockGeometry.blockIndex]
+    if (block === undefined) {
+      return blockGeometry
+    }
+
+    const element = block.element
+    const elementMetrics = getBoxMetrics(element)
+    const elementRect = element.getBoundingClientRect()
+
+    const offsetX = element === root
+      ? rootMetrics.paddingLeft
+      : elementRect.left - rootOriginX + elementMetrics.paddingLeft
+    const offsetY = element === root
+      ? rootMetrics.paddingTop
+      : elementRect.top - rootOriginY + elementMetrics.paddingTop
+
+    return {
+      blockIndex: blockGeometry.blockIndex,
+      rects: blockGeometry.rects.map((rect) => ({
+        ...rect,
+        x: rect.x + offsetX,
+        y: rect.y + offsetY,
+        caretX: rect.caretX + offsetX
+      }))
+    }
+  })
 }
 
 function toCaretPosition(model: DocumentModel, node: Node, offset: number): CaretPosition {
@@ -176,6 +241,43 @@ const ancestorObserverOptions: MutationObserverInit = {
   attributeFilter: ['dir', 'class', 'style']
 }
 
+function applySelectionSuppression(root: HTMLElement): () => void {
+  const ownerDocument = root.ownerDocument
+  const previousScope = root.getAttribute('data-caret-selection-scope')
+  const scope = `caret-scope-${selectionScopeCounter += 1}`
+  const style = ownerDocument.createElement('style')
+
+  style.dataset.caretSelectionStyle = scope
+  style.textContent = `
+[data-caret-selection-scope="${scope}"]::selection,
+[data-caret-selection-scope="${scope}"] *::selection {
+  background: transparent;
+  color: inherit;
+  text-shadow: inherit;
+}
+
+[data-caret-selection-scope="${scope}"]::-moz-selection,
+[data-caret-selection-scope="${scope}"] *::-moz-selection {
+  background: transparent;
+  color: inherit;
+  text-shadow: inherit;
+}
+`.trim()
+
+  root.setAttribute('data-caret-selection-scope', scope)
+  ownerDocument.head.appendChild(style)
+
+  return () => {
+    style.remove()
+    if (previousScope === null) {
+      root.removeAttribute('data-caret-selection-scope')
+      return
+    }
+
+    root.setAttribute('data-caret-selection-scope', previousScope)
+  }
+}
+
 export function attachCaret({ root, createRenderer }: AttachCaretOptions): AttachCaretController {
   let supportState = getSupportState(root)
   let overlay: OverlayRenderer | null = null
@@ -186,6 +288,7 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
   let mutationObserver: MutationObserver | null = null
   let selectionListener: (() => void) | null = null
   let resizeListener: (() => void) | null = null
+  let restoreSelectionSuppression: (() => void) | null = null
   let invalidator = createInvalidator(() => {
     refresh()
   })
@@ -217,10 +320,11 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
     const model = overlay === null
       ? createDocumentModel(root)
       : readModelWithoutOverlay(root, overlay.root)
+    const geometry = createSelectionGeometry(model, getGeometryOptions(root))
 
     snapshot = {
       model,
-      geometry: createSelectionGeometry(model, getGeometryOptions(root))
+      geometry: positionGeometry(root, model, geometry)
     }
   }
 
@@ -304,6 +408,8 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
         snapshot = null
         overlay?.destroy()
         overlay = null
+        restoreSelectionSuppression?.()
+        restoreSelectionSuppression = null
         commitSelection(null, false)
         return
       }
@@ -368,6 +474,7 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
       restorePositionStyle = root.style.position
       root.style.position = 'relative'
     }
+    restoreSelectionSuppression = applySelectionSuppression(root)
 
     refresh()
 
@@ -407,6 +514,8 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
     selectionListener = null
     resizeListener?.()
     resizeListener = null
+    restoreSelectionSuppression?.()
+    restoreSelectionSuppression = null
     overlay?.destroy()
     overlay = null
 

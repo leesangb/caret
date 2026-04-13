@@ -82,6 +82,36 @@ export function Editor() {
 }
 ```
 
+### Multiline Selection
+
+![Multiline selection example](assets/readme/multiline-example.png)
+
+Wrapped selections are rendered as multiple overlay rows:
+
+```tsx
+import { CaretRoot } from '@caret/react'
+
+export function Editor() {
+  return (
+    <CaretRoot>
+      <div
+        className="example-editor--narrow"
+        contentEditable
+        suppressContentEditableWarning
+      >
+        <p>This example forces wrapping so you can verify multi-line selection painting.</p>
+      </div>
+    </CaretRoot>
+  )
+}
+```
+
+```css
+.example-editor--narrow {
+  max-width: 180px;
+}
+```
+
 ### CSS Styled Overlay
 
 ![Styled overlay example](assets/readme/styled-example.png)
