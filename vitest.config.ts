@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    include: ['packages/*/tests/**/*.test.ts', 'packages/*/tests/**/*.test.tsx']
+    include: ['packages/*/tests/**/*.test.ts', 'packages/*/tests/**/*.test.tsx'],
+    exclude: ['packages/*/tests/**/*.browser.test.ts']
   }
 })

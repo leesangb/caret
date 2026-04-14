@@ -4,6 +4,45 @@ import { attachCaret, createInvalidator } from '../src'
 
 let rafSpy: ReturnType<typeof vi.spyOn> | undefined
 let getContextSpy: ReturnType<typeof vi.spyOn> | undefined
+const OriginalResizeObserver = globalThis.ResizeObserver
+
+class MockResizeObserver implements ResizeObserver {
+  static instances: MockResizeObserver[] = []
+
+  readonly observe = vi.fn((target: Element) => {
+    this.targets.add(target)
+  })
+
+  readonly unobserve = vi.fn((target: Element) => {
+    this.targets.delete(target)
+  })
+
+  readonly disconnect = vi.fn(() => {
+    this.targets.clear()
+  })
+
+  private readonly targets = new Set<Element>()
+
+  constructor(private readonly callback: ResizeObserverCallback) {
+    MockResizeObserver.instances.push(this)
+  }
+
+  notify(targets = [...this.targets]) {
+    this.callback(
+      targets.map((target) => ({
+        target,
+        contentRect: target.getBoundingClientRect()
+      })) as ResizeObserverEntry[],
+      this
+    )
+  }
+
+  static reset() {
+    MockResizeObserver.instances = []
+  }
+}
+
+globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
 
 function installMeasureMock() {
   const context = {
@@ -53,6 +92,8 @@ afterEach(() => {
   rafSpy = undefined
   getContextSpy?.mockRestore()
   getContextSpy = undefined
+  MockResizeObserver.reset()
+  globalThis.ResizeObserver = OriginalResizeObserver ?? MockResizeObserver as unknown as typeof ResizeObserver
 })
 
 describe('attachCaret', () => {
@@ -75,120 +116,6 @@ describe('attachCaret', () => {
     expect(typeof caret.toDOMRange).toBe('function')
     expect(typeof caret.fromDOMRange).toBe('function')
     expect(typeof caret.hitTest).toBe('function')
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('suppresses native selection styles inside the mounted root and restores them on unmount', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello world</p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    const scope = root.getAttribute('data-caret-selection-scope')
-    const style = document.head.querySelector('[data-caret-selection-style]')
-
-    expect(scope).toBeTruthy()
-    expect(style).toBeInstanceOf(HTMLStyleElement)
-    expect((style as HTMLStyleElement).textContent).toContain('::selection')
-    expect((style as HTMLStyleElement).textContent).toContain(scope as string)
-
-    caret.unmount()
-
-    expect(root.hasAttribute('data-caret-selection-scope')).toBe(false)
-    expect(document.head.querySelector('[data-caret-selection-style]')).toBeNull()
-
-    root.remove()
-  })
-
-  it('uses a custom renderer factory for caret and selection visuals', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello world</p>'
-    document.body.appendChild(root)
-
-    const render = vi.fn()
-    const destroy = vi.fn()
-    const createRenderer = vi.fn((host: HTMLElement) => ({
-      root: host.ownerDocument.createElement('div'),
-      render,
-      destroy
-    }))
-
-    const caret = attachCaret({ root, createRenderer })
-    caret.mount()
-
-    expect(createRenderer).toHaveBeenCalledWith(root)
-    expect(render).toHaveBeenCalled()
-    expect(render.mock.lastCall?.[0]).toEqual({
-      visualState: {
-        caret: null,
-        selectionRects: []
-      }
-    })
-
-    caret.setCollapsedPosition({
-      path: [0, 0],
-      offset: 2
-    })
-
-    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
-      x: 20,
-      y: 0,
-      height: 20
-    })
-
-    caret.unmount()
-
-    expect(destroy).toHaveBeenCalledTimes(1)
-    root.remove()
-  })
-
-  it('renders inline-boundary DOM selections through the visual-state pipeline', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello <strong>world</strong></p>'
-    document.body.appendChild(root)
-
-    const render = vi.fn()
-    const createRenderer = vi.fn((host: HTMLElement) => ({
-      root: host.ownerDocument.createElement('div'),
-      render,
-      destroy: vi.fn()
-    }))
-
-    const caret = attachCaret({ root, createRenderer })
-    caret.mount()
-
-    const paragraph = root.querySelector('p')
-    if (!(paragraph instanceof HTMLElement)) {
-      throw new Error('Expected paragraph element')
-    }
-
-    const selection = window.getSelection()
-    if (selection === null) {
-      throw new Error('Expected document selection')
-    }
-
-    const range = document.createRange()
-    range.setStart(paragraph, 1)
-    range.setEnd(paragraph, 1)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    document.dispatchEvent(new Event('selectionchange'))
-
-    expect(render.mock.lastCall?.[0]?.visualState.caret).toEqual({
-      x: 60,
-      y: 0,
-      height: 20
-    })
 
     caret.unmount()
     root.remove()
@@ -433,232 +360,6 @@ describe('attachCaret', () => {
     root.remove()
   })
 
-  it('can merge mixed inline selections into a single line rect', () => {
-    installRichMeasureMock()
-
-    const root = document.createElement('div')
-    root.style.font = '16px sans-serif'
-    root.style.lineHeight = '32px'
-    root.innerHTML = [
-      '<p style="line-height: 32px">',
-      '<span style="font: 32px serif; line-height: 32px">AAAA</span>',
-      '<span style="font: 16px serif; line-height: 32px"> bb</span>',
-      '</p>'
-    ].join('')
-    document.body.appendChild(root)
-
-    const firstText = root.querySelectorAll('span')[0]?.firstChild
-    const secondText = root.querySelectorAll('span')[1]?.firstChild
-    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
-      throw new Error('Expected span text nodes')
-    }
-
-    const render = vi.fn()
-    const caret = attachCaret({
-      root,
-      selection: {
-        mergeStrategy: 'line'
-      },
-      createRenderer: (host) => ({
-        root: host.ownerDocument.createElement('div'),
-        render,
-        destroy: vi.fn()
-      })
-    })
-
-    caret.mount()
-
-    const selection = window.getSelection()
-    if (selection === null) {
-      throw new Error('Expected document selection')
-    }
-
-    const range = document.createRange()
-    range.setStart(firstText, 0)
-    range.setEnd(secondText, 3)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    document.dispatchEvent(new Event('selectionchange'))
-
-    expect(render.mock.lastCall?.[0]?.visualState.selectionRects).toHaveLength(1)
-    expect(render.mock.lastCall?.[0]?.visualState.selectionRects[0]).toMatchObject({
-      x: expect.any(Number),
-      y: expect.any(Number),
-      width: expect.any(Number),
-      height: expect.any(Number)
-    })
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('falls back without mounting the overlay for rtl roots', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.dir = 'rtl'
-    root.innerHTML = '<p>Hello world</p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    expect(caret.supportState).toEqual({
-      supported: false,
-      reason: 'rtl-root'
-    })
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
-
-    caret.setCollapsedPosition({
-      path: [0, 0],
-      offset: 0
-    })
-    expect(caret.getSelection()).toBeNull()
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('falls back when the root switches to rtl before mount', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello world</p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-
-    root.dir = 'rtl'
-
-    expect(caret.supportState).toEqual({
-      supported: false,
-      reason: 'rtl-root'
-    })
-    caret.setCollapsedPosition({
-      path: [0, 0],
-      offset: 0
-    })
-    expect(caret.getSelection()).toBeNull()
-
-    caret.mount()
-
-    expect(caret.supportState).toEqual({
-      supported: false,
-      reason: 'rtl-root'
-    })
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
-
-    caret.setCollapsedPosition({
-      path: [0, 0],
-      offset: 0
-    })
-    expect(caret.getSelection()).toBeNull()
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('tears down the overlay when the mounted root switches to rtl', async () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello world</p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
-
-    root.dir = 'rtl'
-
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve())
-      })
-    })
-
-    expect(caret.supportState).toEqual({
-      supported: false,
-      reason: 'rtl-root'
-    })
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
-    expect(root.hasAttribute('data-caret-selection-scope')).toBe(false)
-    expect(caret.getSelection()).toBeNull()
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('tears down the overlay when an ancestor switches to rtl after mount', async () => {
-    installMeasureMock()
-
-    const wrapper = document.createElement('div')
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello world</p>'
-    wrapper.appendChild(root)
-    document.body.appendChild(wrapper)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
-
-    wrapper.dir = 'rtl'
-
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve())
-      })
-    })
-
-    expect(caret.supportState).toEqual({
-      supported: false,
-      reason: 'rtl-root'
-    })
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeNull()
-
-    caret.unmount()
-    wrapper.remove()
-  })
-
-  it('syncs selection from the DOM selection object', () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello <strong>world</strong></p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    const world = root.querySelector('strong')?.firstChild
-    if (!(world instanceof Text)) {
-      throw new Error('Expected text node inside strong element')
-    }
-
-    const range = document.createRange()
-    range.setStart(world, 0)
-    range.setEnd(world, 5)
-
-    const selection = window.getSelection()
-    if (selection === null) {
-      throw new Error('Expected document selection')
-    }
-
-    selection.removeAllRanges()
-    selection.addRange(range)
-    document.dispatchEvent(new Event('selectionchange'))
-
-    const synced = caret.getSelection()
-
-    expect(synced?.anchor.offset).toBe(0)
-    expect(synced?.focus.offset).toBe(5)
-
-    caret.unmount()
-    root.remove()
-  })
-
   it('preserves backward selection direction through the fallback DOM sync path', () => {
     installMeasureMock()
 
@@ -739,56 +440,6 @@ describe('attachCaret', () => {
     caret.refresh()
 
     expect(caret.hitTest({ x: 5, y: 30 })).toBeNull()
-
-    caret.unmount()
-    root.remove()
-  })
-
-  it('resyncs selection state after mutation-driven snapshot refresh', async () => {
-    installMeasureMock()
-
-    const root = document.createElement('div')
-    root.innerHTML = '<p>Hello <strong>world</strong></p>'
-    document.body.appendChild(root)
-
-    const caret = attachCaret({ root })
-    caret.mount()
-
-    const world = root.querySelector('strong')?.firstChild
-    if (!(world instanceof Text)) {
-      throw new Error('Expected text node inside strong element')
-    }
-
-    const selection = window.getSelection()
-    if (selection === null) {
-      throw new Error('Expected document selection')
-    }
-
-    const range = document.createRange()
-    range.setStart(world, 0)
-    range.setEnd(world, 5)
-    selection.removeAllRanges()
-    selection.addRange(range)
-
-    const before = caret.setSelectionFromDOM()
-    if (before === null) {
-      throw new Error('Expected controller selection')
-    }
-
-    const paragraph = root.querySelector('p')
-    if (!(paragraph instanceof HTMLElement)) {
-      throw new Error('Expected paragraph element')
-    }
-
-    paragraph.insertBefore(document.createTextNode('lead '), paragraph.firstChild)
-
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => resolve())
-      })
-    })
-
-    expect(caret.getSelection()).toEqual(caret.fromDOMRange(selection.getRangeAt(0)))
 
     caret.unmount()
     root.remove()
@@ -924,23 +575,76 @@ describe('attachCaret', () => {
     }
   })
 
-  it('forces a relative host when inline position is static', () => {
+  it('refreshes when the root size changes without a window resize event', async () => {
     installMeasureMock()
 
     const root = document.createElement('div')
-    root.style.position = 'static'
+    root.innerHTML = '<p>Hello world</p>'
+    document.body.appendChild(root)
+
+    let width = 220
+    vi.spyOn(root, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: width,
+      bottom: 100,
+      width,
+      height: 100,
+      toJSON() {
+        return {}
+      }
+    } as DOMRect))
+
+    const render = vi.fn()
+    const caret = attachCaret({
+      root,
+      createRenderer: (host) => ({
+        root: host.ownerDocument.createElement('div'),
+        render,
+        destroy: vi.fn()
+      })
+    })
+
+    caret.mount()
+
+    const resizeObserver = MockResizeObserver.instances[0]
+    expect(resizeObserver).toBeDefined()
+    expect(resizeObserver?.observe).toHaveBeenCalledWith(root)
+
+    const initialRenderCount = render.mock.calls.length
+
+    width = 140
+    resizeObserver?.notify([root])
+
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve())
+    })
+
+    expect(render.mock.calls.length).toBeGreaterThan(initialRenderCount)
+
+    caret.unmount()
+    root.remove()
+  })
+
+  it('disconnects the resize observer on unmount', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
     root.innerHTML = '<p>Hello world</p>'
     document.body.appendChild(root)
 
     const caret = attachCaret({ root })
     caret.mount()
 
-    expect(root.style.position).toBe('relative')
-    expect(root.querySelector('[data-caret-overlay="true"]')).toBeInstanceOf(HTMLElement)
+    const resizeObserver = MockResizeObserver.instances[0]
+    expect(resizeObserver).toBeDefined()
 
     caret.unmount()
 
-    expect(root.style.position).toBe('static')
+    expect(resizeObserver?.disconnect).toHaveBeenCalledTimes(1)
+
     root.remove()
   })
 

@@ -291,6 +291,7 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
   let mounted = false
   let currentSelection: CaretSelection | null = null
   let mutationObserver: MutationObserver | null = null
+  let resizeObserver: ResizeObserver | null = null
   let selectionListener: (() => void) | null = null
   let resizeListener: (() => void) | null = null
   let restoreSelectionSuppression: (() => void) | null = null
@@ -505,6 +506,13 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
       view?.removeEventListener('resize', onResize)
     }
 
+    if (typeof globalThis.ResizeObserver === 'function') {
+      resizeObserver = new globalThis.ResizeObserver(() => {
+        scheduleRefresh()
+      })
+      resizeObserver.observe(root)
+    }
+
     mutationObserver = new MutationObserver(() => {
       scheduleRefresh()
     })
@@ -517,6 +525,8 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
     invalidator.cancel()
     mutationObserver?.disconnect()
     mutationObserver = null
+    resizeObserver?.disconnect()
+    resizeObserver = null
     selectionListener?.()
     selectionListener = null
     resizeListener?.()
