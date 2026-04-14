@@ -93,6 +93,35 @@ describe('deriveVisualState', () => {
     ])
   })
 
+  it('keeps collapsed carets on the correct later block when offsets overlap earlier blocks', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Hello world</p><p>Second line</p>'
+
+    const secondText = root.querySelectorAll('p')[1]?.firstChild
+    if (!(secondText instanceof Text)) {
+      throw new Error('Expected second paragraph text node')
+    }
+
+    const model = createDocumentModel(root)
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 20,
+      font: '16px sans-serif',
+      charWidth: 10
+    })
+    const selection = getSelection(root, [secondText, 5], [secondText, 5])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.caret).toEqual({
+      x: 50,
+      y: 20,
+      height: 20
+    })
+    expect(visualState.selectionRects).toEqual([])
+  })
+
   it('splits selection rects across wrapped lines', () => {
     installMeasureMock()
 
