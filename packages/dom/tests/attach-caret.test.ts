@@ -433,6 +433,65 @@ describe('attachCaret', () => {
     root.remove()
   })
 
+  it('can merge mixed inline selections into a single line rect', () => {
+    installRichMeasureMock()
+
+    const root = document.createElement('div')
+    root.style.font = '16px sans-serif'
+    root.style.lineHeight = '32px'
+    root.innerHTML = [
+      '<p style="line-height: 32px">',
+      '<span style="font: 32px serif; line-height: 32px">AAAA</span>',
+      '<span style="font: 16px serif; line-height: 32px"> bb</span>',
+      '</p>'
+    ].join('')
+    document.body.appendChild(root)
+
+    const firstText = root.querySelectorAll('span')[0]?.firstChild
+    const secondText = root.querySelectorAll('span')[1]?.firstChild
+    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const render = vi.fn()
+    const caret = attachCaret({
+      root,
+      selection: {
+        mergeStrategy: 'line'
+      },
+      createRenderer: (host) => ({
+        root: host.ownerDocument.createElement('div'),
+        render,
+        destroy: vi.fn()
+      })
+    })
+
+    caret.mount()
+
+    const selection = window.getSelection()
+    if (selection === null) {
+      throw new Error('Expected document selection')
+    }
+
+    const range = document.createRange()
+    range.setStart(firstText, 0)
+    range.setEnd(secondText, 3)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+
+    expect(render.mock.lastCall?.[0]?.visualState.selectionRects).toHaveLength(1)
+    expect(render.mock.lastCall?.[0]?.visualState.selectionRects[0]).toMatchObject({
+      x: expect.any(Number),
+      y: expect.any(Number),
+      width: expect.any(Number),
+      height: expect.any(Number)
+    })
+
+    caret.unmount()
+    root.remove()
+  })
+
   it('falls back without mounting the overlay for rtl roots', () => {
     installMeasureMock()
 

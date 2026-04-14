@@ -83,6 +83,8 @@ test('captures README example screenshots', async ({ page }) => {
   const basic = page.locator('[data-readme-example="basic"]')
   const multiline = page.locator('[data-readme-example="multiline"]')
   const mixedTypography = page.locator('[data-readme-example="mixed-typography"]')
+  const selectionFragment = page.locator('[data-readme-example="selection-fragment"]')
+  const selectionLine = page.locator('[data-readme-example="selection-line"]')
   const styled = page.locator('[data-readme-example="styled"]')
   const custom = page.locator('[data-readme-example="custom"]')
   const customShape = page.locator('[data-readme-example="custom-shape"]')
@@ -90,6 +92,8 @@ test('captures README example screenshots', async ({ page }) => {
   await expect(basic).toBeVisible()
   await expect(multiline).toBeVisible()
   await expect(mixedTypography).toBeVisible()
+  await expect(selectionFragment).toBeVisible()
+  await expect(selectionLine).toBeVisible()
   await expect(styled).toBeVisible()
   await expect(custom).toBeVisible()
   await expect(customShape).toBeVisible()
@@ -105,6 +109,14 @@ test('captures README example screenshots', async ({ page }) => {
   await setSegmentSelection(page, 'mixed-typography', 'intro', 0, 'emoji-end', 8)
   await expect(mixedTypography.locator('[data-caret-overlay-part="selection"]').first()).toBeVisible()
   await mixedTypography.screenshot({ path: 'assets/validation/mixed-typography-example.png' })
+
+  await setSegmentSelection(page, 'selection-fragment', 'fragment-large', 0, 'fragment-tail', 7)
+  await expect(selectionFragment.locator('[data-caret-overlay-part="selection"]').first()).toBeVisible()
+  await selectionFragment.screenshot({ path: 'assets/readme/selection-fragment-example.png' })
+
+  await setSegmentSelection(page, 'selection-line', 'line-large', 0, 'line-tail', 7)
+  await expect(selectionLine.locator('[data-caret-overlay-part="selection"]').first()).toBeVisible()
+  await selectionLine.screenshot({ path: 'assets/readme/selection-line-example.png' })
 
   await setParagraphSelection(page, 'styled', 1, 12, 1, 12)
   await expect(styled.locator('[data-caret-overlay-part="caret"]')).toBeVisible()

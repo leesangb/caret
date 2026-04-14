@@ -162,6 +162,10 @@ select {
   line-height: 1.55;
 }
 
+.example-editor--merge {
+  max-width: 480px;
+}
+
 .mixed-type--serif {
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.15em;

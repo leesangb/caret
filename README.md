@@ -112,6 +112,53 @@ export function Editor() {
 }
 ```
 
+### Selection Merge Strategies
+
+Default `fragment` mode keeps mixed inline fragments separate on the same line:
+
+![Fragment selection strategy example](assets/readme/selection-fragment-example.png)
+
+```ts
+import { attachCaret } from '@caret/dom'
+
+const caret = attachCaret({
+  root,
+  selection: {
+    mergeStrategy: 'fragment'
+  }
+})
+
+caret.mount()
+```
+
+Use `line` mode when you want one continuous block per wrapped line:
+
+![Line selection strategy example](assets/readme/selection-line-example.png)
+
+```tsx
+import { CaretRoot } from '@caret/react'
+
+export function Editor() {
+  return (
+    <CaretRoot
+      selection={{
+        mergeStrategy: 'line'
+      }}
+    >
+      <div contentEditable suppressContentEditableWarning>
+        <p>
+          <span style={{ fontSize: '1.55em', fontWeight: 800 }}>Big beats</span>
+          <span> small </span>
+          <span style={{ fontSize: '1.35em', fontWeight: 800 }}>Loud</span>
+        </p>
+      </div>
+    </CaretRoot>
+  )
+}
+```
+
+`fragment` is more faithful to mixed inline geometry. `line` is visually simpler and closer to a single editor-style highlight band.
+
 ### CSS Styled Overlay
 
 ![Styled overlay example](assets/readme/styled-example.png)
@@ -290,10 +337,16 @@ For most styling, prefer renderer options:
 - `caret.width`
 - `caret.color`
 - `caret.radius`
+- `selection.mergeStrategy`
 - `selection.background`
 - `selection.outline`
 - `selection.radius`
 - `selection.shape`
+
+`selection.mergeStrategy` supports:
+
+- `fragment`: keep mixed inline fragments separate on the same line
+- `line`: merge same-line fragments into one larger selection block
 
 `selection.shape` currently supports:
 
@@ -309,6 +362,9 @@ import { attachCaret, createOverlayRenderer } from '@caret/dom'
 
 const caret = attachCaret({
   root,
+  selection: {
+    mergeStrategy: 'line'
+  },
   createRenderer(host) {
     return createOverlayRenderer(host, {
       caret: {
@@ -369,6 +425,9 @@ import { createOverlayRenderer } from '@caret/dom'
 export function Editor() {
   return (
     <CaretRoot
+      selection={{
+        mergeStrategy: 'line'
+      }}
       createRenderer={(host) =>
         createOverlayRenderer(host, {
           caret: {

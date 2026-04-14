@@ -1,9 +1,13 @@
 import { attachCaret, type OverlayRenderer } from '@caret/dom'
+import type { SelectionMergeStrategy } from '@caret/core'
 import { cloneElement, useEffect, useState, type ReactElement, type Ref } from 'react'
 
 export interface CaretRootProps {
   children: ReactElement
   createRenderer?: (host: HTMLElement) => OverlayRenderer
+  selection?: {
+    mergeStrategy?: SelectionMergeStrategy
+  }
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
@@ -17,20 +21,20 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
   }
 }
 
-export function CaretRoot({ children, createRenderer }: CaretRootProps) {
+export function CaretRoot({ children, createRenderer, selection }: CaretRootProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref
 
   useEffect(() => {
     if (root === null) return
 
-    const caret = attachCaret({ root, createRenderer })
+    const caret = attachCaret({ root, createRenderer, selection })
     caret.mount()
 
     return () => {
       caret.unmount()
     }
-  }, [createRenderer, root])
+  }, [createRenderer, root, selection])
 
   return cloneElement(children, {
     ref: (node: HTMLElement | null) => {

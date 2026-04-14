@@ -19,6 +19,14 @@ export interface CaretVisualState {
   selectionRects: OverlayRect[]
 }
 
+export type SelectionMergeStrategy = 'fragment' | 'line'
+
+export interface VisualOptions {
+  selection?: {
+    mergeStrategy?: SelectionMergeStrategy
+  }
+}
+
 function comparePaths(left: number[], right: number[]): number {
   for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
     if (left[index] !== right[index]) {
@@ -256,6 +264,7 @@ export function deriveVisualState(
   model: DocumentModel,
   selection: CaretSelection | null,
   geometry: SelectionGeometryBlock[],
+  options: VisualOptions = {},
 ): CaretVisualState {
   if (selection === null) {
     return {
@@ -315,6 +324,7 @@ export function deriveVisualState(
   const normalizedEndOffset = normalizeResolvedOffset(geometry, endOffset, 'forward')
 
   const selectionRects: OverlayRect[] = []
+  const mergeStrategy = options.selection?.mergeStrategy ?? 'fragment'
   const pushMergedSelectionRect = (nextRect: OverlayRect) => {
     const previous = selectionRects[selectionRects.length - 1]
     if (
@@ -377,6 +387,22 @@ export function deriveVisualState(
       continue
     }
 
+    const lineSelectionRects: OverlayRect[] = []
+    const pushLineRect = (nextRect: OverlayRect) => {
+      const previous = lineSelectionRects[lineSelectionRects.length - 1]
+      if (
+        previous !== undefined &&
+        previous.y === nextRect.y &&
+        previous.height === nextRect.height &&
+        Math.abs((previous.x + previous.width) - nextRect.x) < 0.001
+      ) {
+        previous.width += nextRect.width
+        return
+      }
+
+      lineSelectionRects.push(nextRect)
+    }
+
     for (let index = startIndex; index < endIndex; index += 1) {
       const current = rects[index]
       const next = rects[index + 1]
@@ -392,12 +418,35 @@ export function deriveVisualState(
         continue
       }
 
-      pushMergedSelectionRect({
+      pushLineRect({
         x: current.caretX,
         y: current.y,
         width,
         height: current.height
       })
+    }
+
+    if (lineSelectionRects.length === 0) {
+      continue
+    }
+
+    if (mergeStrategy === 'line') {
+      const left = Math.min(...lineSelectionRects.map((rect) => rect.x))
+      const top = Math.min(...lineSelectionRects.map((rect) => rect.y))
+      const right = Math.max(...lineSelectionRects.map((rect) => rect.x + rect.width))
+      const bottom = Math.max(...lineSelectionRects.map((rect) => rect.y + rect.height))
+
+      selectionRects.push({
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top
+      })
+      continue
+    }
+
+    for (const lineRect of lineSelectionRects) {
+      pushMergedSelectionRect(lineRect)
     }
   }
 

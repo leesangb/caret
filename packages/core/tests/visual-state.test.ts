@@ -567,6 +567,64 @@ describe('deriveVisualState', () => {
     ])
   })
 
+  it('can merge same-line mixed fragments into one line-sized selection rect', () => {
+    const context = {
+      font: '',
+      measureText(this: CanvasRenderingContext2D, text: string) {
+        const isLarge = this.font.includes('32px')
+        return {
+          width: text.length * 10,
+          fontBoundingBoxAscent: isLarge ? 20 : 8,
+          fontBoundingBoxDescent: isLarge ? 4 : 8,
+          actualBoundingBoxAscent: isLarge ? 20 : 8,
+          actualBoundingBoxDescent: isLarge ? 4 : 8
+        }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>AAAA</span><span> bb</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const firstText = text[0]?.firstChild
+    const secondText = text[1]?.firstChild
+    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
+    ;(model.blocks[0].lineHeight as number | undefined) = 32
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '32px sans-serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 400,
+      lineHeight: 32,
+      font: '16px sans-serif'
+    })
+
+    const selection = getSelection(root, [firstText, 0], [secondText, 3])
+    const visualState = deriveVisualState(model, selection, geometry, {
+      selection: {
+        mergeStrategy: 'line'
+      }
+    })
+
+    expect(visualState.selectionRects).toEqual([
+      {
+        x: 0,
+        y: 2,
+        width: 70,
+        height: 28
+      }
+    ])
+  })
+
   it('keeps the last selection rect when the range ends inside an emoji surrogate pair', () => {
     installMeasureMock()
 

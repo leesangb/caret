@@ -9,7 +9,8 @@ import {
   type CaretSelection,
   type CaretSupportState,
   type DocumentModel,
-  type SelectionGeometryBlock
+  type SelectionGeometryBlock,
+  type SelectionMergeStrategy
 } from '@caret/core'
 import { createInvalidator } from './observers/create-invalidator'
 import {
@@ -22,6 +23,9 @@ type SelectionChangeListener = (selection: CaretSelection | null) => void
 export interface AttachCaretOptions {
   root: HTMLElement
   createRenderer?: (host: HTMLElement) => OverlayRenderer
+  selection?: {
+    mergeStrategy?: SelectionMergeStrategy
+  }
 }
 
 export interface AttachCaretController {
@@ -279,7 +283,7 @@ function applySelectionSuppression(root: HTMLElement): () => void {
   }
 }
 
-export function attachCaret({ root, createRenderer }: AttachCaretOptions): AttachCaretController {
+export function attachCaret({ root, createRenderer, selection }: AttachCaretOptions): AttachCaretController {
   let supportState = getSupportState(root)
   let overlay: OverlayRenderer | null = null
   const listeners = new Set<SelectionChangeListener>()
@@ -346,7 +350,9 @@ export function attachCaret({ root, createRenderer }: AttachCaretOptions): Attac
 
     if (snapshot === null) return
     ensureOverlay().render({
-      visualState: deriveVisualState(snapshot.model, currentSelection, snapshot.geometry)
+      visualState: deriveVisualState(snapshot.model, currentSelection, snapshot.geometry, {
+        selection
+      })
     })
   }
 
