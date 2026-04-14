@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@caret/core": ["./packages/core/src/index.ts"],
+      "@caret/dom": ["./packages/dom/src/index.ts"],
+      "@caret/react": ["./packages/react/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/core/src",
+    "packages/dom/src",
+    "packages/react/src",
+    "playground/src",
+    "playground/tests"
+  ]
+}

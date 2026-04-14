@@ -322,6 +322,7 @@ function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: Layout
   }
 
   return materializeLineRange(prepared, {
+    width: 0,
     start: EMPTY_CURSOR,
     end
   }).text.length

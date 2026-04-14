@@ -13,6 +13,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@caret/core": "file:../core"
+    "@caret/core": "workspace:*"
   }
 }

@@ -156,6 +156,7 @@ function positionGeometry(
 
     return {
       blockIndex: blockGeometry.blockIndex,
+      originY: offsetY,
       rects: blockGeometry.rects.map((rect) => ({
         ...rect,
         x: rect.x + offsetX,
@@ -291,13 +292,14 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
   let mounted = false
   let currentSelection: CaretSelection | null = null
   let mutationObserver: MutationObserver | null = null
+  let resizeObserver: ResizeObserver | null = null
   let selectionListener: (() => void) | null = null
   let resizeListener: (() => void) | null = null
   let restoreSelectionSuppression: (() => void) | null = null
-  let invalidator = createInvalidator(() => {
+  const invalidator = createInvalidator(() => {
     refresh()
   })
-  let restorePositionStyle = false
+  let restorePositionStyle: string | null = null
   const view = root.ownerDocument?.defaultView ?? globalThis.window
 
   const ensureOverlay = () => {
@@ -505,6 +507,13 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
       view?.removeEventListener('resize', onResize)
     }
 
+    if (typeof globalThis.ResizeObserver === 'function') {
+      resizeObserver = new globalThis.ResizeObserver(() => {
+        scheduleRefresh()
+      })
+      resizeObserver.observe(root)
+    }
+
     mutationObserver = new MutationObserver(() => {
       scheduleRefresh()
     })
@@ -517,6 +526,8 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
     invalidator.cancel()
     mutationObserver?.disconnect()
     mutationObserver = null
+    resizeObserver?.disconnect()
+    resizeObserver = null
     selectionListener?.()
     selectionListener = null
     resizeListener?.()
@@ -526,7 +537,7 @@ export function attachCaret({ root, createRenderer, selection }: AttachCaretOpti
     overlay?.destroy()
     overlay = null
 
-    if (restorePositionStyle !== false) {
+    if (restorePositionStyle !== null) {
       root.style.position = restorePositionStyle
     }
 

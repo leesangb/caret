@@ -246,8 +246,8 @@ describe('deriveVisualState', () => {
     }
 
     const model = createDocumentModel(root)
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string }).font = '16px serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '32px serif'
+    model.blocks[0]!.runs[0]!.font = '16px serif'
+    model.blocks[0]!.runs[1]!.font = '32px serif'
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 200,
@@ -293,10 +293,10 @@ describe('deriveVisualState', () => {
     }
 
     const model = createDocumentModel(root)
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '16px serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '32px serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+    model.blocks[0]!.runs[0]!.font = '16px serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 32
+    model.blocks[0]!.runs[1]!.font = '32px serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 32
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 200,
@@ -342,11 +342,11 @@ describe('deriveVisualState', () => {
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
     ;(model.blocks[0].lineHeight as number | undefined) = 20
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number; letterSpacing: number }).font = '32px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number; letterSpacing: number }).lineHeight = 28
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number; letterSpacing: number }).letterSpacing = -0.75
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 20
+    model.blocks[0]!.runs[0]!.font = '32px sans-serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 28
+    model.blocks[0]!.runs[0]!.letterSpacing = -0.75
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 20
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,
@@ -394,10 +394,10 @@ describe('deriveVisualState', () => {
 
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).font = '16px monospace'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineStartInset = 3
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineEndInset = 3
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '16px sans-serif'
+    model.blocks[0]!.runs[0]!.font = '16px monospace'
+    model.blocks[0]!.runs[0]!.inlineStartInset = 3
+    model.blocks[0]!.runs[0]!.inlineEndInset = 3
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,
@@ -446,10 +446,10 @@ describe('deriveVisualState', () => {
 
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).font = '16px monospace'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineStartInset = 3
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineEndInset = 3
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '16px sans-serif'
+    model.blocks[0]!.runs[0]!.font = '16px monospace'
+    model.blocks[0]!.runs[0]!.inlineStartInset = 3
+    model.blocks[0]!.runs[0]!.inlineEndInset = 3
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,
@@ -506,10 +506,10 @@ describe('deriveVisualState', () => {
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
     ;(model.blocks[0].lineHeight as number | undefined) = 20
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '32px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 28
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 20
+    model.blocks[0]!.runs[0]!.font = '32px sans-serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 28
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 20
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,
@@ -566,10 +566,10 @@ describe('deriveVisualState', () => {
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
     ;(model.blocks[0].lineHeight as number | undefined) = 32
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '32px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+    model.blocks[0]!.runs[0]!.font = '32px sans-serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 32
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 32
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,
@@ -626,10 +626,10 @@ describe('deriveVisualState', () => {
     const model = createDocumentModel(root)
     ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
     ;(model.blocks[0].lineHeight as number | undefined) = 32
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '32px sans-serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+    model.blocks[0]!.runs[0]!.font = '32px sans-serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 32
+    model.blocks[0]!.runs[1]!.font = '16px sans-serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 32
 
     const geometry = createSelectionGeometry(model, {
       blockWidth: 400,

@@ -107,7 +107,7 @@ describe('CaretRoot', () => {
   })
 
   it('rebinds to a new root when the child element changes', () => {
-    const { container, rerender, unmount } = render(
+    const { rerender, unmount } = render(
       <CaretRoot>
         <div>Hello</div>
       </CaretRoot>
