@@ -67,6 +67,70 @@ function collectTextNodes(node: Node): Text[] {
   return nodes
 }
 
+function getTextHost(root: HTMLElement, node: Node): HTMLElement {
+  if (node instanceof HTMLElement) {
+    return node
+  }
+
+  return node.parentElement ?? root
+}
+
+function getCanvasFont(element: HTMLElement) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  if (computed === null || computed === undefined) {
+    return undefined
+  }
+
+  if (computed.font.length > 0) {
+    return computed.font
+  }
+
+  const size = computed.fontSize || '16px'
+  const family = computed.fontFamily || 'sans-serif'
+  const style = computed.fontStyle && computed.fontStyle !== 'normal' ? `${computed.fontStyle} ` : ''
+  const variant = computed.fontVariant && computed.fontVariant !== 'normal' ? `${computed.fontVariant} ` : ''
+  const weight = computed.fontWeight && computed.fontWeight !== 'normal' ? `${computed.fontWeight} ` : ''
+
+  return `${style}${variant}${weight}${size} ${family}`.trim()
+}
+
+function getLineHeight(element: HTMLElement) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const parsed = Number.parseFloat(computed?.lineHeight ?? '')
+
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function getSpacingValue(
+  element: HTMLElement,
+  property: 'letterSpacing' | 'wordSpacing'
+) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const raw = computed?.[property]
+  if (raw === undefined || raw === null || raw === '' || raw === 'normal') {
+    return undefined
+  }
+
+  const parsed = Number.parseFloat(raw)
+  return Number.isFinite(parsed) && parsed !== 0 ? parsed : undefined
+}
+
+function getInlineInset(
+  element: HTMLElement,
+  side: 'Left' | 'Right'
+) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const padding = Number.parseFloat(computed?.[`padding${side}` as 'paddingLeft'] ?? '')
+  const border = Number.parseFloat(computed?.[`border${side}Width` as 'borderLeftWidth'] ?? '')
+  const total = (Number.isFinite(padding) ? padding : 0) + (Number.isFinite(border) ? border : 0)
+
+  return total > 0 ? total : undefined
+}
+
 function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
   const runs: NormalizedRun[] = []
   let start = 0
@@ -81,7 +145,13 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
         text,
         start,
         end: start + text.length,
-        node: textNode
+        node: textNode,
+        font: getCanvasFont(getTextHost(root, textNode)),
+        lineHeight: getLineHeight(getTextHost(root, textNode)),
+        letterSpacing: getSpacingValue(getTextHost(root, textNode), 'letterSpacing'),
+        wordSpacing: getSpacingValue(getTextHost(root, textNode), 'wordSpacing'),
+        inlineStartInset: getInlineInset(getTextHost(root, textNode), 'Left'),
+        inlineEndInset: getInlineInset(getTextHost(root, textNode), 'Right')
       })
       start += text.length
     }
@@ -109,7 +179,11 @@ export function createDocumentModel(root: HTMLElement): DocumentModel {
       path: source.path,
       text: runs.map((run) => run.text).join(''),
       runs,
-      element: source.element
+      element: source.element,
+      font: getCanvasFont(source.element),
+      lineHeight: getLineHeight(source.element),
+      letterSpacing: getSpacingValue(source.element, 'letterSpacing'),
+      wordSpacing: getSpacingValue(source.element, 'wordSpacing')
     }
   })
 

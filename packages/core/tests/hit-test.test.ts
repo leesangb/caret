@@ -105,6 +105,26 @@ describe('selection geometry and hit testing', () => {
     expect(hitTest(model, narrowBoxes, { x: 5, y: 30 })?.offset).toBeGreaterThan(0)
   })
 
+  it('preserves plain-text caret geometry when block spacing is applied', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>A B</p>'
+    const model = createDocumentModel(root)
+
+    ;(model.blocks[0].letterSpacing as number | undefined) = 2
+    ;(model.blocks[0].wordSpacing as number | undefined) = 5
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    expect(boxes[0]?.rects.map((rect) => rect.caretX)).toEqual([0, 12, 29, 39])
+    expect(hitTest(model, boxes, { x: 24, y: 10 })?.offset).toBe(2)
+  })
+
   it('handles non-BMP text without breaking caret geometry', () => {
     installMeasureMock()
 
@@ -122,5 +142,30 @@ describe('selection geometry and hit testing', () => {
 
     expect(boxes[0].rects.every((rect) => Number.isFinite(rect.x) && Number.isFinite(rect.width))).toBe(true)
     expect(hit?.offset).toBe(3)
+  })
+
+  it('uses per-line rich inline heights when mixed runs wrap', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>AA</span><span>B</span><span>CC</span></p>'
+    const model = createDocumentModel(root)
+
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '16px serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 20
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '32px serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).font = '16px serif'
+    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).lineHeight = 20
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 45,
+      lineHeight: 20,
+      font: '16px serif'
+    })
+
+    const lineTops = [...new Set(boxes[0].rects.map((rect) => rect.y))]
+
+    expect(lineTops).toEqual([0, 32])
   })
 })

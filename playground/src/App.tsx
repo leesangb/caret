@@ -8,6 +8,9 @@ interface ExampleCardProps {
   description: string
   createRenderer?: (host: HTMLElement) => OverlayRenderer
   editorClassName?: string
+  selection?: {
+    mergeStrategy?: 'fragment' | 'line'
+  }
   children: ReactNode
 }
 
@@ -159,6 +162,7 @@ function ExampleCard({
   description,
   createRenderer,
   editorClassName,
+  selection,
   children
 }: ExampleCardProps) {
   return (
@@ -169,7 +173,7 @@ function ExampleCard({
         <p>{description}</p>
       </div>
 
-      <CaretRoot createRenderer={createRenderer}>
+      <CaretRoot createRenderer={createRenderer} selection={selection}>
         <div
           className={['example-editor', editorClassName].filter(Boolean).join(' ')}
           contentEditable
@@ -183,6 +187,16 @@ function ExampleCard({
         </div>
       </CaretRoot>
     </section>
+  )
+}
+
+function MergeStrategyContent({ prefix }: { prefix: string }) {
+  return (
+    <p>
+      <span className="mixed-type mixed-type--large" data-mixed-segment={`${prefix}-large`}>Big beats</span>
+      <span data-mixed-segment={`${prefix}-tail`}> small </span>
+      <span className="mixed-type mixed-type--display" data-mixed-segment={`${prefix}-display`}>Loud</span>
+    </p>
   )
 }
 
@@ -217,6 +231,51 @@ export function App() {
           >
             <p>This example forces wrapping so you can verify multi-line selection painting.</p>
             <p>The selection overlay should break into separate rows and still align to text.</p>
+          </ExampleCard>
+
+          <ExampleCard
+            id="mixed-typography"
+            title="Mixed Typography"
+            description="Validation case for mixed fonts, font sizes, inline emoji, and varied emphasis."
+            editorClassName="example-editor--mixed"
+          >
+            <p>
+              <span data-mixed-segment="intro">Studio </span>
+              <span className="mixed-type mixed-type--serif" data-mixed-segment="serif">Serif</span>
+              <span data-mixed-segment="middle"> meets </span>
+              <span className="mixed-type mixed-type--mono" data-mixed-segment="mono">mono()</span>
+              <span data-mixed-segment="emoji-start"> with ✨ </span>
+              <span className="mixed-type mixed-type--display" data-mixed-segment="display">Loud</span>
+              <span data-mixed-segment="emoji-end"> emoji 😄</span>
+            </p>
+            <p>
+              <span className="mixed-type mixed-type--large" data-mixed-segment="large">Big beats</span>
+              <span data-mixed-segment="tail"> small details and mixed baseline hops.</span>
+            </p>
+          </ExampleCard>
+
+          <ExampleCard
+            id="selection-fragment"
+            title="Selection Fragment Mode"
+            description="Default selection geometry follows each mixed inline fragment on the same line."
+            editorClassName="example-editor--mixed example-editor--merge"
+            selection={{
+              mergeStrategy: 'fragment'
+            }}
+          >
+            <MergeStrategyContent prefix="fragment" />
+          </ExampleCard>
+
+          <ExampleCard
+            id="selection-line"
+            title="Selection Line Mode"
+            description="Line merge mode collapses same-line mixed fragments into one larger selection block."
+            editorClassName="example-editor--mixed example-editor--merge"
+            selection={{
+              mergeStrategy: 'line'
+            }}
+          >
+            <MergeStrategyContent prefix="line" />
           </ExampleCard>
 
           <ExampleCard

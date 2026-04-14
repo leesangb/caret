@@ -19,6 +19,14 @@ export interface CaretVisualState {
   selectionRects: OverlayRect[]
 }
 
+export type SelectionMergeStrategy = 'fragment' | 'line'
+
+export interface VisualOptions {
+  selection?: {
+    mergeStrategy?: SelectionMergeStrategy
+  }
+}
+
 function comparePaths(left: number[], right: number[]): number {
   for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
     if (left[index] !== right[index]) {
@@ -122,6 +130,42 @@ function findBoundary(
   return rects.find((rect) => rect.caretOffset === absoluteOffset) ?? null
 }
 
+function findBoundaryIndex(
+  rects: SelectionGeometryRect[],
+  boundary: SelectionGeometryRect,
+) {
+  return rects.findIndex((rect) => rect === boundary)
+}
+
+function findBoundaryAtOrBefore(
+  rects: SelectionGeometryRect[],
+  absoluteOffset: number,
+): SelectionGeometryRect | null {
+  let candidate: SelectionGeometryRect | null = null
+
+  for (const rect of rects) {
+    if (rect.caretOffset > absoluteOffset) {
+      break
+    }
+    candidate = rect
+  }
+
+  return candidate
+}
+
+function findBoundaryAtOrAfter(
+  rects: SelectionGeometryRect[],
+  absoluteOffset: number,
+): SelectionGeometryRect | null {
+  for (const rect of rects) {
+    if (rect.caretOffset >= absoluteOffset) {
+      return rect
+    }
+  }
+
+  return null
+}
+
 function compareResolvedOffsets(
   left: { blockIndex: number; offset: number },
   right: { blockIndex: number; offset: number },
@@ -131,6 +175,51 @@ function compareResolvedOffsets(
   }
 
   return left.offset - right.offset
+}
+
+function normalizeResolvedOffset(
+  geometry: SelectionGeometryBlock[],
+  resolved: { blockIndex: number; offset: number },
+  direction: 'backward' | 'forward',
+) {
+  const block = geometry.find((entry) => entry.blockIndex === resolved.blockIndex)
+  if (block === undefined) {
+    return resolved
+  }
+
+  const offsets = [...new Set(block.rects.map((rect) => rect.caretOffset))].sort((left, right) => left - right)
+  if (offsets.includes(resolved.offset)) {
+    return resolved
+  }
+
+  if (direction === 'backward') {
+    let normalized = offsets[0] ?? resolved.offset
+    for (const offset of offsets) {
+      if (offset > resolved.offset) {
+        break
+      }
+      normalized = offset
+    }
+
+    return {
+      blockIndex: resolved.blockIndex,
+      offset: normalized
+    }
+  }
+
+  for (const offset of offsets) {
+    if (offset >= resolved.offset) {
+      return {
+        blockIndex: resolved.blockIndex,
+        offset
+      }
+    }
+  }
+
+  return {
+    blockIndex: resolved.blockIndex,
+    offset: offsets[offsets.length - 1] ?? resolved.offset
+  }
 }
 
 function getLineRects(geometry: SelectionGeometryBlock[]) {
@@ -175,6 +264,7 @@ export function deriveVisualState(
   model: DocumentModel,
   selection: CaretSelection | null,
   geometry: SelectionGeometryBlock[],
+  options: VisualOptions = {},
 ): CaretVisualState {
   if (selection === null) {
     return {
@@ -230,7 +320,25 @@ export function deriveVisualState(
     }
   }
 
+  const normalizedStartOffset = normalizeResolvedOffset(geometry, startOffset, 'backward')
+  const normalizedEndOffset = normalizeResolvedOffset(geometry, endOffset, 'forward')
+
   const selectionRects: OverlayRect[] = []
+  const mergeStrategy = options.selection?.mergeStrategy ?? 'fragment'
+  const pushMergedSelectionRect = (nextRect: OverlayRect) => {
+    const previous = selectionRects[selectionRects.length - 1]
+    if (
+      previous !== undefined &&
+      previous.y === nextRect.y &&
+      previous.height === nextRect.height &&
+      Math.abs((previous.x + previous.width) - nextRect.x) < 0.001
+    ) {
+      previous.width += nextRect.width
+      return
+    }
+
+    selectionRects.push(nextRect)
+  }
 
   for (const line of lineRects) {
     const rects = line.rects
@@ -250,40 +358,96 @@ export function deriveVisualState(
     }
 
     if (
-      compareResolvedOffsets(startOffset, lineEnd) >= 0 ||
-      compareResolvedOffsets(endOffset, lineStart) <= 0
+      compareResolvedOffsets(normalizedStartOffset, lineEnd) >= 0 ||
+      compareResolvedOffsets(normalizedEndOffset, lineStart) <= 0
     ) {
       continue
     }
 
     const startBoundary =
-      compareResolvedOffsets(startOffset, lineStart) <= 0
+      compareResolvedOffsets(normalizedStartOffset, lineStart) <= 0
         ? first
-        : startOffset.blockIndex === line.blockIndex
-          ? findBoundary(rects, startOffset.offset)
+        : normalizedStartOffset.blockIndex === line.blockIndex
+          ? findBoundaryAtOrBefore(rects, normalizedStartOffset.offset)
           : null
     const endBoundary =
-      compareResolvedOffsets(endOffset, lineEnd) >= 0
+      compareResolvedOffsets(normalizedEndOffset, lineEnd) >= 0
         ? last
-        : endOffset.blockIndex === line.blockIndex
-          ? findBoundary(rects, endOffset.offset)
+        : normalizedEndOffset.blockIndex === line.blockIndex
+          ? findBoundaryAtOrAfter(rects, normalizedEndOffset.offset)
           : null
 
     if (startBoundary === null || endBoundary === null) {
       continue
     }
+    const startIndex = findBoundaryIndex(rects, startBoundary)
+    const endIndex = findBoundaryIndex(rects, endBoundary)
 
-    const width = endBoundary.caretX - startBoundary.caretX
-    if (width <= 0) {
+    if (startIndex < 0 || endIndex < 0 || startIndex >= endIndex) {
       continue
     }
 
-    selectionRects.push({
-      x: startBoundary.caretX,
-      y: first.y,
-      width,
-      height: first.height
-    })
+    const lineSelectionRects: OverlayRect[] = []
+    const pushLineRect = (nextRect: OverlayRect) => {
+      const previous = lineSelectionRects[lineSelectionRects.length - 1]
+      if (
+        previous !== undefined &&
+        previous.y === nextRect.y &&
+        previous.height === nextRect.height &&
+        Math.abs((previous.x + previous.width) - nextRect.x) < 0.001
+      ) {
+        previous.width += nextRect.width
+        return
+      }
+
+      lineSelectionRects.push(nextRect)
+    }
+
+    for (let index = startIndex; index < endIndex; index += 1) {
+      const current = rects[index]
+      const next = rects[index + 1]
+      if (current === undefined || next === undefined) {
+        continue
+      }
+      if (next.caretOffset === current.caretOffset) {
+        continue
+      }
+
+      const width = next.caretX - current.caretX
+      if (width <= 0) {
+        continue
+      }
+
+      pushLineRect({
+        x: current.caretX,
+        y: current.y,
+        width,
+        height: current.height
+      })
+    }
+
+    if (lineSelectionRects.length === 0) {
+      continue
+    }
+
+    if (mergeStrategy === 'line') {
+      const left = Math.min(...lineSelectionRects.map((rect) => rect.x))
+      const top = Math.min(...lineSelectionRects.map((rect) => rect.y))
+      const right = Math.max(...lineSelectionRects.map((rect) => rect.x + rect.width))
+      const bottom = Math.max(...lineSelectionRects.map((rect) => rect.y + rect.height))
+
+      selectionRects.push({
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top
+      })
+      continue
+    }
+
+    for (const lineRect of lineSelectionRects) {
+      pushMergedSelectionRect(lineRect)
+    }
   }
 
   return {

@@ -157,6 +157,43 @@ select {
   max-width: 180px;
 }
 
+.example-editor--mixed {
+  max-width: 420px;
+  line-height: 1.55;
+}
+
+.example-editor--merge {
+  max-width: 480px;
+}
+
+.mixed-type--serif {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+.mixed-type--mono {
+  font-family: 'SFMono-Regular', 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.95em;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 6px;
+  padding: 0 0.18em;
+}
+
+.mixed-type--display {
+  font-size: 1.35em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #c2410c;
+}
+
+.mixed-type--large {
+  font-size: 1.55em;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
 .example-editor--styled .styled-overlay__caret {
   --caret-color: #0f172a;
   --caret-radius: 3px;

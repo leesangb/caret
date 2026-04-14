@@ -84,6 +84,28 @@ describe('CaretRoot', () => {
     })
   })
 
+  it('forwards selection options to attachCaret', () => {
+    render(
+      <CaretRoot
+        selection={{
+          mergeStrategy: 'line'
+        }}
+      >
+        <div>Hello</div>
+      </CaretRoot>
+    )
+
+    const child = screen.getByText('Hello')
+
+    expect(attachCaretMock).toHaveBeenCalledWith({
+      root: child,
+      createRenderer: undefined,
+      selection: {
+        mergeStrategy: 'line'
+      }
+    })
+  })
+
   it('rebinds to a new root when the child element changes', () => {
     const { container, rerender, unmount } = render(
       <CaretRoot>

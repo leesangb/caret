@@ -112,6 +112,55 @@ export function Editor() {
 }
 ```
 
+### Selection Merge Strategies
+
+Default `fragment` mode keeps mixed inline fragments separate on the same line:
+
+![Fragment selection strategy example](assets/readme/selection-fragment-example.png)
+
+```ts
+import { attachCaret } from '@caret/dom'
+
+const caret = attachCaret({
+  root,
+  selection: {
+    mergeStrategy: 'fragment'
+  }
+})
+
+caret.mount()
+```
+
+Use `line` mode when you want one continuous block per wrapped line:
+
+![Line selection strategy example](assets/readme/selection-line-example.png)
+
+```tsx
+import { CaretRoot } from '@caret/react'
+
+export function Editor() {
+  return (
+    <CaretRoot
+      selection={{
+        mergeStrategy: 'line'
+      }}
+    >
+      <div contentEditable suppressContentEditableWarning>
+        <p>
+          <span style={{ fontSize: '1.55em', fontWeight: 800 }}>Big beats</span>
+          <span> small </span>
+          <span style={{ fontSize: '1.35em', fontWeight: 800 }}>Loud</span>
+        </p>
+      </div>
+    </CaretRoot>
+  )
+}
+```
+
+`fragment` is more faithful to mixed inline geometry. `line` is visually simpler and closer to a single editor-style highlight band.
+
+`caret.blink` is optional. If you omit it, the custom caret stays static.
+
 ### CSS Styled Overlay
 
 ![Styled overlay example](assets/readme/styled-example.png)
@@ -130,7 +179,11 @@ export function Editor() {
           caret: {
             width: 3,
             color: '#0f172a',
-            radius: 3
+            radius: 3,
+            blink: {
+              onMs: 530,
+              offMs: 530
+            }
           },
           selection: {
             background: 'rgba(37, 99, 235, 0.2)',
@@ -290,10 +343,17 @@ For most styling, prefer renderer options:
 - `caret.width`
 - `caret.color`
 - `caret.radius`
+- `caret.blink`
+- `selection.mergeStrategy`
 - `selection.background`
 - `selection.outline`
 - `selection.radius`
 - `selection.shape`
+
+`selection.mergeStrategy` supports:
+
+- `fragment`: keep mixed inline fragments separate on the same line
+- `line`: merge same-line fragments into one larger selection block
 
 `selection.shape` currently supports:
 
@@ -309,12 +369,20 @@ import { attachCaret, createOverlayRenderer } from '@caret/dom'
 
 const caret = attachCaret({
   root,
+  selection: {
+    mergeStrategy: 'line'
+  },
   createRenderer(host) {
     return createOverlayRenderer(host, {
       caret: {
         width: 3,
         color: '#111827',
-        radius: 2
+        radius: 2,
+        blink: {
+          onMs: 530,
+          offMs: 530,
+          delayMs: 80
+        }
       },
       selection: {
         background: 'rgba(59, 130, 246, 0.22)',
@@ -369,10 +437,17 @@ import { createOverlayRenderer } from '@caret/dom'
 export function Editor() {
   return (
     <CaretRoot
+      selection={{
+        mergeStrategy: 'line'
+      }}
       createRenderer={(host) =>
         createOverlayRenderer(host, {
           caret: {
-            width: 2
+            width: 2,
+            blink: {
+              onMs: 530,
+              offMs: 530
+            }
           },
           classNames: {
             root: 'caret-overlay',
