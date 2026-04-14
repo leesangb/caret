@@ -286,6 +286,10 @@ export function deriveVisualState(
     }
 
     for (const line of lineRects) {
+      if (line.blockIndex !== boundaryOffset.blockIndex) {
+        continue
+      }
+
       const rects = line.rects
       const boundary = findBoundary(rects, boundaryOffset.offset)
       if (boundary !== null) {
