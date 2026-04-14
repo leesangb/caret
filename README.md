@@ -18,13 +18,13 @@ Use it when you want to:
 ## Install
 
 ```bash
-npm install @caret/dom
+pnpm add @caret/dom
 ```
 
 React:
 
 ```bash
-npm install @caret/react
+pnpm add @caret/react
 ```
 
 ## Quick Start
@@ -528,4 +528,4 @@ if (!caret.supportState.supported) {
 - Best fit is `contenteditable` with native input behavior still enabled.
 - The library works on one root subtree at a time.
 - The root will be promoted to `position: relative` while mounted if it is `position: static`.
-- Regenerate README screenshots with `npm run capture:readme`.
+- Regenerate README screenshots with `pnpm capture:readme`.

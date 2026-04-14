@@ -13,7 +13,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@caret/dom": "file:../dom",
+    "@caret/core": "workspace:*",
+    "@caret/dom": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   }

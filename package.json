@@ -2,12 +2,9 @@
   "name": "caret",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "playground"
-  ],
+  "packageManager": "pnpm@10.19.0",
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "pnpm -r --if-present build",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
     "test:browser:vitest": "vitest run --config vitest.browser.config.ts",
