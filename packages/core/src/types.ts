@@ -30,6 +30,8 @@ export interface NormalizedRun {
   lineHeight?: number
   letterSpacing?: number
   wordSpacing?: number
+  inlineStartInset?: number
+  inlineEndInset?: number
   placeholder?: true
 }
 

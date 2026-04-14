@@ -383,6 +383,9 @@ export function deriveVisualState(
       if (current === undefined || next === undefined) {
         continue
       }
+      if (next.caretOffset === current.caretOffset) {
+        continue
+      }
 
       const width = next.caretX - current.caretX
       if (width <= 0) {

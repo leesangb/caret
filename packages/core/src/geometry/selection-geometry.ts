@@ -324,7 +324,9 @@ function shouldUseRichInline(block: NormalizedBlock, fallbackFont: string) {
   return runs.some((run) => (
     (run.font ?? blockFont) !== blockFont ||
     (run.letterSpacing ?? blockLetterSpacing) !== blockLetterSpacing ||
-    (run.wordSpacing ?? blockWordSpacing) !== blockWordSpacing
+    (run.wordSpacing ?? blockWordSpacing) !== blockWordSpacing ||
+    (run.inlineStartInset ?? 0) !== 0 ||
+    (run.inlineEndInset ?? 0) !== 0
   ))
 }
 
@@ -339,7 +341,8 @@ function buildRichInlineRects(
     .filter((run) => !run.placeholder)
     .map((run) => ({
       text: run.text,
-      font: run.font ?? options.font
+      font: run.font ?? options.font,
+      extraWidth: (run.inlineStartInset ?? 0) + (run.inlineEndInset ?? 0)
     }))
 
   const flow = prepareRichInline(richItems)
@@ -353,8 +356,11 @@ function buildRichInlineRects(
         run,
         font,
         leadingTrim: trimmed.leadingTrim,
+        trailingTrim: trimmed.trailingTrim,
         letterSpacing: run.letterSpacing ?? block.letterSpacing,
         wordSpacing: run.wordSpacing ?? block.wordSpacing,
+        inlineStartInset: run.inlineStartInset ?? 0,
+        inlineEndInset: run.inlineEndInset ?? 0,
         prepared: prepareWithSegments(trimmed.trimmedText, font),
         metrics: measureFontBox(getMeasureContext(contextCache, font))
       }
@@ -372,6 +378,21 @@ function buildRichInlineRects(
     }
 
     const line = materializeRichInlineLineRange(flow, range)
+    const fragments: Array<{
+      startX: number
+      gapBefore: number
+      boundariesInFragment: number[]
+      codeUnitBoundaries: number[]
+      absoluteStart: number
+      leadingGapWidth: number
+      leadingCaretOffset: number | null
+      textStartInset: number
+      textEndInset: number
+      metrics: {
+        ascent: number
+        descent: number
+      }
+    }> = []
     const boundaries: Array<{
       caretX: number
       caretOffset: number
@@ -395,12 +416,6 @@ function buildRichInlineRects(
       )
       lineAscent = Math.max(lineAscent, preparedRun.metrics.ascent)
       lineDescent = Math.max(lineDescent, preparedRun.metrics.descent)
-      const fragmentHeight = preparedRun.metrics.ascent + preparedRun.metrics.descent > 0
-        ? Math.max(1, preparedRun.metrics.ascent + preparedRun.metrics.descent)
-        : lineHeightForLine
-      const fragmentTop = preparedRun.metrics.ascent + preparedRun.metrics.descent > 0
-        ? lineTop + Math.max(0, (lineHeightForLine - fragmentHeight) / 2)
-        : lineTop
 
       const units = Array.from(fragment.text)
       const boundariesInFragment = buildBoundaryWidths(
@@ -426,37 +441,62 @@ function buildRichInlineRects(
         fragmentStart === 0 &&
         preparedRun.leadingTrim > 0 &&
         fragment.gapBefore > 0
+      const fragmentTextEnd = absoluteStart + codeUnitBoundaries[codeUnitBoundaries.length - 1]!
+      const isFirstFragmentForRun = fragmentStart === 0
+      const isLastFragmentForRun = fragmentTextEnd >= preparedRun.run.end - preparedRun.trailingTrim
 
-      if (hasLeadingCollapsedGap) {
-        boundaries.push({
-          caretX: x,
-          caretOffset: preparedRun.run.start,
-          rectTop: fragmentTop,
-          rectHeight: fragmentHeight
-        })
-      }
+      fragments.push({
+        startX: x,
+        gapBefore: fragment.gapBefore,
+        boundariesInFragment,
+        codeUnitBoundaries,
+        absoluteStart,
+        leadingGapWidth: hasLeadingCollapsedGap ? fragment.gapBefore : 0,
+        leadingCaretOffset: hasLeadingCollapsedGap ? preparedRun.run.start : null,
+        textStartInset: isFirstFragmentForRun ? preparedRun.inlineStartInset : 0,
+        textEndInset: isLastFragmentForRun ? preparedRun.inlineEndInset : 0,
+        metrics: preparedRun.metrics
+      })
 
       x += fragment.gapBefore
-
-      if (hasLeadingCollapsedGap) {
-        boundaries.push({
-          caretX: x,
-          caretOffset: absoluteStart,
-          rectTop: fragmentTop,
-          rectHeight: fragmentHeight
-        })
-      }
-
-      for (let caretIndex = hasLeadingCollapsedGap ? 1 : 0; caretIndex < boundariesInFragment.length; caretIndex += 1) {
-        boundaries.push({
-          caretX: x + boundariesInFragment[caretIndex]!,
-          caretOffset: absoluteStart + codeUnitBoundaries[caretIndex]!,
-          rectTop: fragmentTop,
-          rectHeight: fragmentHeight
-        })
-      }
-
+      x += isFirstFragmentForRun ? preparedRun.inlineStartInset : 0
       x += boundariesInFragment[boundariesInFragment.length - 1] ?? 0
+      x += isLastFragmentForRun ? preparedRun.inlineEndInset : 0
+    }
+
+    const lineMetricsHeight = lineAscent + lineDescent
+    const halfLeading = lineMetricsHeight > 0
+      ? Math.max(0, (lineHeightForLine - lineMetricsHeight) / 2)
+      : 0
+    const baselineY = lineTop + halfLeading + lineAscent
+
+    for (const fragment of fragments) {
+      const fragmentHeight = fragment.metrics.ascent + fragment.metrics.descent > 0
+        ? Math.max(1, fragment.metrics.ascent + fragment.metrics.descent)
+        : lineHeightForLine
+      const fragmentTop = fragment.metrics.ascent + fragment.metrics.descent > 0
+        ? baselineY - fragment.metrics.ascent
+        : lineTop
+
+      if (fragment.leadingGapWidth > 0 && fragment.leadingCaretOffset !== null) {
+        boundaries.push({
+          caretX: fragment.startX,
+          caretOffset: fragment.leadingCaretOffset,
+          rectTop: fragmentTop,
+          rectHeight: fragmentHeight
+        })
+      }
+
+      const fragmentOriginX = fragment.startX + fragment.gapBefore + fragment.textStartInset
+
+      for (let caretIndex = 0; caretIndex < fragment.boundariesInFragment.length; caretIndex += 1) {
+        boundaries.push({
+          caretX: fragmentOriginX + fragment.boundariesInFragment[caretIndex]!,
+          caretOffset: fragment.absoluteStart + fragment.codeUnitBoundaries[caretIndex]!,
+          rectTop: fragmentTop,
+          rectHeight: fragmentHeight
+        })
+      }
     }
 
     const actualLineWidth = boundaries[boundaries.length - 1]?.caretX ?? line.width

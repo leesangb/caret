@@ -118,6 +118,19 @@ function getSpacingValue(
   return Number.isFinite(parsed) && parsed !== 0 ? parsed : undefined
 }
 
+function getInlineInset(
+  element: HTMLElement,
+  side: 'Left' | 'Right'
+) {
+  const view = element.ownerDocument?.defaultView ?? globalThis.window
+  const computed = view?.getComputedStyle(element)
+  const padding = Number.parseFloat(computed?.[`padding${side}` as 'paddingLeft'] ?? '')
+  const border = Number.parseFloat(computed?.[`border${side}Width` as 'borderLeftWidth'] ?? '')
+  const total = (Number.isFinite(padding) ? padding : 0) + (Number.isFinite(border) ? border : 0)
+
+  return total > 0 ? total : undefined
+}
+
 function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
   const runs: NormalizedRun[] = []
   let start = 0
@@ -136,7 +149,9 @@ function collectRuns(source: BlockSource, root: HTMLElement): NormalizedRun[] {
         font: getCanvasFont(getTextHost(root, textNode)),
         lineHeight: getLineHeight(getTextHost(root, textNode)),
         letterSpacing: getSpacingValue(getTextHost(root, textNode), 'letterSpacing'),
-        wordSpacing: getSpacingValue(getTextHost(root, textNode), 'wordSpacing')
+        wordSpacing: getSpacingValue(getTextHost(root, textNode), 'wordSpacing'),
+        inlineStartInset: getInlineInset(getTextHost(root, textNode), 'Left'),
+        inlineEndInset: getInlineInset(getTextHost(root, textNode), 'Right')
       })
       start += text.length
     }

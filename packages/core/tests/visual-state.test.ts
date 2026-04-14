@@ -338,6 +338,115 @@ describe('deriveVisualState', () => {
     ])
   })
 
+  it('offsets mixed-inline selection geometry by inline start and end chrome', () => {
+    const context = {
+      font: '',
+      measureText(text: string) {
+        return {
+          width: text.length * 10,
+          fontBoundingBoxAscent: 14,
+          fontBoundingBoxDescent: 6,
+          actualBoundingBoxAscent: 12,
+          actualBoundingBoxDescent: 4
+        }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>mono</span><span> tail</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const firstText = text[0]?.firstChild
+    if (!(firstText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).font = '16px monospace'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineStartInset = 3
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineEndInset = 3
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '16px sans-serif'
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 400,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const selection = getSelection(root, [firstText, 0], [firstText, 4])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.selectionRects).toEqual([
+      {
+        x: 3,
+        y: 0,
+        width: 40,
+        height: 20
+      }
+    ])
+  })
+
+  it('does not paint inline end chrome as selected width when the next fragment continues on the same line', () => {
+    const context = {
+      font: '',
+      measureText(text: string) {
+        return {
+          width: text.length * 10,
+          fontBoundingBoxAscent: 14,
+          fontBoundingBoxDescent: 6,
+          actualBoundingBoxAscent: 12,
+          actualBoundingBoxDescent: 4
+        }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>mono</span><span>tail</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const firstText = text[0]?.firstChild
+    const secondText = text[1]?.firstChild
+    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).font = '16px monospace'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineStartInset = 3
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; inlineStartInset: number; inlineEndInset: number }).inlineEndInset = 3
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string }).font = '16px sans-serif'
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 400,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    const selection = getSelection(root, [firstText, 0], [secondText, 1])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.selectionRects).toEqual([
+      {
+        x: 3,
+        y: 0,
+        width: 40,
+        height: 20
+      },
+      {
+        x: 46,
+        y: 0,
+        width: 10,
+        height: 20
+      }
+    ])
+  })
+
   it('splits same-line selection rects when mixed inline runs have different vertical boxes', () => {
     const context = {
       font: '',
@@ -393,6 +502,66 @@ describe('deriveVisualState', () => {
         x: 32,
         y: 6,
         width: 26,
+        height: 16
+      }
+    ])
+  })
+
+  it('aligns mixed inline fragments to a shared baseline instead of centering each fragment', () => {
+    const context = {
+      font: '',
+      measureText(this: CanvasRenderingContext2D, text: string) {
+        const isLarge = this.font.includes('32px')
+        return {
+          width: text.length * 10,
+          fontBoundingBoxAscent: isLarge ? 20 : 8,
+          fontBoundingBoxDescent: isLarge ? 4 : 8,
+          actualBoundingBoxAscent: isLarge ? 20 : 8,
+          actualBoundingBoxDescent: isLarge ? 4 : 8
+        }
+      }
+    } as CanvasRenderingContext2D
+
+    getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context)
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p><span>AAAA</span><span> bb</span></p>'
+
+    const text = root.querySelectorAll('span')
+    const firstText = text[0]?.firstChild
+    const secondText = text[1]?.firstChild
+    if (!(firstText instanceof Text) || !(secondText instanceof Text)) {
+      throw new Error('Expected span text nodes')
+    }
+
+    const model = createDocumentModel(root)
+    ;(model.blocks[0].font as string | undefined) = '16px sans-serif'
+    ;(model.blocks[0].lineHeight as number | undefined) = 32
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '32px sans-serif'
+    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 32
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '16px sans-serif'
+    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
+
+    const geometry = createSelectionGeometry(model, {
+      blockWidth: 400,
+      lineHeight: 32,
+      font: '16px sans-serif'
+    })
+
+    const selection = getSelection(root, [firstText, 0], [secondText, 3])
+    const visualState = deriveVisualState(model, selection, geometry)
+
+    expect(visualState.selectionRects).toEqual([
+      {
+        x: 0,
+        y: 2,
+        width: 40,
+        height: 24
+      },
+      {
+        x: 40,
+        y: 14,
+        width: 30,
         height: 16
       }
     ])
