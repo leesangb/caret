@@ -16,6 +16,11 @@ export interface OverlayRendererOptions {
     width?: number
     color?: string
     radius?: number | string
+    blink?: {
+      onMs?: number
+      offMs?: number
+      delayMs?: number
+    }
   }
   selection?: {
     background?: string
@@ -29,6 +34,8 @@ export interface OverlayRendererOptions {
     selection?: string
   }
 }
+
+let blinkAnimationCounter = 0
 
 function formatCssLength(value: number | string | undefined, fallback: string) {
   if (value === undefined) {
@@ -72,6 +79,46 @@ function ensureOverlayRoot(host: HTMLElement) {
   return overlay
 }
 
+function ensureBlinkStyle(
+  host: HTMLElement,
+  blink: {
+    onMs?: number
+    offMs?: number
+    delayMs?: number
+  }
+) {
+  const onMs = Math.max(0, blink.onMs ?? 530)
+  const offMs = Math.max(0, blink.offMs ?? 530)
+  const totalMs = onMs + offMs
+
+  if (totalMs <= 0) {
+    return null
+  }
+
+  const onPercent = Math.min(100, Math.max(0, (onMs / totalMs) * 100))
+  const animationName = `caret-blink-${blinkAnimationCounter += 1}`
+  const style = host.ownerDocument.createElement('style')
+
+  style.dataset.caretBlinkStyle = animationName
+  style.textContent = `
+@keyframes ${animationName} {
+  0%, ${onPercent}% { opacity: 1; }
+  ${onPercent === 100 ? 100 : Math.min(100, onPercent + 0.01)}%, 100% { opacity: 0; }
+}
+`
+
+  host.ownerDocument.head.appendChild(style)
+
+  return {
+    animationName,
+    durationMs: totalMs,
+    delayMs: Math.max(0, blink.delayMs ?? 0),
+    destroy() {
+      style.remove()
+    }
+  }
+}
+
 export function createOverlayRenderer(
   host: HTMLElement,
   options: OverlayRendererOptions = {}
@@ -85,6 +132,7 @@ export function createOverlayRenderer(
     caretOptions.radius,
     `var(--caret-radius, ${Math.min(caretWidth / 2, 2)}px)`
   )
+  const caretBlink = caretOptions.blink
   const selectionBackground =
     selectionOptions.background ?? 'var(--caret-selection-background, rgba(30, 64, 175, 0.16))'
   const selectionOutline =
@@ -94,6 +142,7 @@ export function createOverlayRenderer(
     'var(--caret-selection-radius, 0px)'
   )
   const selectionShape = selectionOptions.shape
+  const blinkStyle = caretBlink === undefined ? null : ensureBlinkStyle(host, caretBlink)
   let mounted = false
 
   if (options.classNames?.root !== undefined) {
@@ -172,6 +221,13 @@ export function createOverlayRenderer(
       marker.style.height = `${Math.max(0, caret.height)}px`
       marker.style.background = caretBackground
       marker.style.borderRadius = caretRadius
+      if (blinkStyle !== null) {
+        marker.style.animationName = blinkStyle.animationName
+        marker.style.animationDuration = `${blinkStyle.durationMs}ms`
+        marker.style.animationDelay = `${blinkStyle.delayMs}ms`
+        marker.style.animationIterationCount = 'infinite'
+        marker.style.animationTimingFunction = 'steps(1, end)'
+      }
       root.appendChild(marker)
     }
   }
@@ -180,6 +236,7 @@ export function createOverlayRenderer(
     root,
     render,
     destroy() {
+      blinkStyle?.destroy()
       root.remove()
       mounted = false
     }

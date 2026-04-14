@@ -111,4 +111,42 @@ describe('createOverlayRenderer', () => {
     renderer.destroy()
     host.remove()
   })
+
+  it('applies configurable caret blink timing when requested', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+
+    const renderer = createOverlayRenderer(host, {
+      caret: {
+        blink: {
+          onMs: 320,
+          offMs: 180,
+          delayMs: 90
+        }
+      }
+    })
+
+    renderer.render({
+      visualState: {
+        caret: {
+          x: 12,
+          y: 4,
+          height: 20
+        },
+        selectionRects: []
+      }
+    })
+
+    const caret = host.querySelector('[data-caret-overlay-part="caret"]')
+
+    expect(caret).toBeInstanceOf(HTMLElement)
+    expect((caret as HTMLElement).style.animationDuration).toBe('500ms')
+    expect((caret as HTMLElement).style.animationDelay).toBe('90ms')
+    expect((caret as HTMLElement).style.animationIterationCount).toBe('infinite')
+    expect((caret as HTMLElement).style.animationTimingFunction).toBe('steps(1, end)')
+    expect((caret as HTMLElement).style.animationName).toContain('caret-blink-')
+
+    renderer.destroy()
+    host.remove()
+  })
 })

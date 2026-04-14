@@ -159,6 +159,8 @@ export function Editor() {
 
 `fragment` is more faithful to mixed inline geometry. `line` is visually simpler and closer to a single editor-style highlight band.
 
+`caret.blink` is optional. If you omit it, the custom caret stays static.
+
 ### CSS Styled Overlay
 
 ![Styled overlay example](assets/readme/styled-example.png)
@@ -177,7 +179,11 @@ export function Editor() {
           caret: {
             width: 3,
             color: '#0f172a',
-            radius: 3
+            radius: 3,
+            blink: {
+              onMs: 530,
+              offMs: 530
+            }
           },
           selection: {
             background: 'rgba(37, 99, 235, 0.2)',
@@ -337,6 +343,7 @@ For most styling, prefer renderer options:
 - `caret.width`
 - `caret.color`
 - `caret.radius`
+- `caret.blink`
 - `selection.mergeStrategy`
 - `selection.background`
 - `selection.outline`
@@ -370,7 +377,12 @@ const caret = attachCaret({
       caret: {
         width: 3,
         color: '#111827',
-        radius: 2
+        radius: 2,
+        blink: {
+          onMs: 530,
+          offMs: 530,
+          delayMs: 80
+        }
       },
       selection: {
         background: 'rgba(59, 130, 246, 0.22)',
@@ -431,7 +443,11 @@ export function Editor() {
       createRenderer={(host) =>
         createOverlayRenderer(host, {
           caret: {
-            width: 2
+            width: 2,
+            blink: {
+              onMs: 530,
+              offMs: 530
+            }
           },
           classNames: {
             root: 'caret-overlay',
