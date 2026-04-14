@@ -1,7 +1,7 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 async function setParagraphSelection(
-  page: Parameters<typeof test>[0] extends never ? never : any,
+  page: Page,
   exampleId: string,
   startParagraph: number,
   startOffset: number,
@@ -40,7 +40,7 @@ async function setParagraphSelection(
 }
 
 async function setSegmentSelection(
-  page: Parameters<typeof test>[0] extends never ? never : any,
+  page: Page,
   exampleId: string,
   startSegment: string,
   startOffset: number,

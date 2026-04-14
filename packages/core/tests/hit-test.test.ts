@@ -151,12 +151,12 @@ describe('selection geometry and hit testing', () => {
     root.innerHTML = '<p><span>AA</span><span>B</span><span>CC</span></p>'
     const model = createDocumentModel(root)
 
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).font = '16px serif'
-    ;(model.blocks[0].runs[0] as typeof model.blocks[0].runs[0] & { font: string; lineHeight: number }).lineHeight = 20
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).font = '32px serif'
-    ;(model.blocks[0].runs[1] as typeof model.blocks[0].runs[1] & { font: string; lineHeight: number }).lineHeight = 32
-    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).font = '16px serif'
-    ;(model.blocks[0].runs[2] as typeof model.blocks[0].runs[2] & { font: string; lineHeight: number }).lineHeight = 20
+    model.blocks[0]!.runs[0]!.font = '16px serif'
+    model.blocks[0]!.runs[0]!.lineHeight = 20
+    model.blocks[0]!.runs[1]!.font = '32px serif'
+    model.blocks[0]!.runs[1]!.lineHeight = 32
+    model.blocks[0]!.runs[2]!.font = '16px serif'
+    model.blocks[0]!.runs[2]!.lineHeight = 20
 
     const boxes = createSelectionGeometry(model, {
       blockWidth: 45,

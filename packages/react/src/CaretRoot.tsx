@@ -23,7 +23,8 @@ function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
 
 export function CaretRoot({ children, createRenderer, selection }: CaretRootProps) {
   const [root, setRoot] = useState<HTMLElement | null>(null)
-  const childRef = (children.props as { ref?: Ref<HTMLElement> }).ref
+  const child = children as ReactElement<{ ref?: Ref<HTMLElement> }>
+  const childRef = child.props.ref
 
   useEffect(() => {
     if (root === null) return
@@ -36,7 +37,7 @@ export function CaretRoot({ children, createRenderer, selection }: CaretRootProp
     }
   }, [createRenderer, root, selection])
 
-  return cloneElement(children, {
+  return cloneElement(child, {
     ref: (node: HTMLElement | null) => {
       assignRef(childRef, node)
       setRoot((currentRoot) => (currentRoot === node ? currentRoot : node))
