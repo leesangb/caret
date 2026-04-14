@@ -10,7 +10,7 @@ import {
   materializeRichInlineLineRange,
   prepareRichInline
 } from '@chenglou/pretext/rich-inline'
-import type { CaretPosition, DocumentModel, NormalizedBlock } from '../types'
+import type { CaretPosition, DocumentModel, NormalizedBlock, NormalizedRun } from '../types'
 
 export interface SelectionGeometryRect {
   x: number
@@ -39,6 +39,61 @@ export interface GeometryOptions {
 interface InlineSpacing {
   letterSpacing?: number
   wordSpacing?: number
+}
+
+interface RichInlineMetrics {
+  ascent: number
+  descent: number
+}
+
+interface GeometryBoundary {
+  caretX: number
+  caretOffset: number
+  rectTop: number
+  rectHeight: number
+}
+
+interface LineRectBuildInput {
+  block: NormalizedBlock
+  blockTop: number
+  layoutWidth: number
+  lineHeight: number
+  measureContext: CanvasRenderingContext2D | null
+  fallbackWidth: number
+  spacing: InlineSpacing
+  lineIndex: number
+  lineText: string
+  lineStartOffset: number
+}
+
+interface RichInlinePreparedRun {
+  run: NormalizedRun
+  font: string
+  leadingTrim: number
+  trailingTrim: number
+  letterSpacing?: number
+  wordSpacing?: number
+  inlineStartInset: number
+  inlineEndInset: number
+  prepared: PreparedTextWithSegments
+  metrics: RichInlineMetrics
+}
+
+interface RichInlinePreparation {
+  flow: ReturnType<typeof prepareRichInline>
+  runs: RichInlinePreparedRun[]
+}
+
+interface RichInlineFragmentGeometry {
+  startX: number
+  gapBefore: number
+  boundariesInFragment: number[]
+  codeUnitBoundaries: number[]
+  absoluteStart: number
+  leadingGapWidth: number
+  leadingCaretOffset: number | null
+  textStartInset: number
+  metrics: RichInlineMetrics
 }
 
 const EMPTY_CURSOR: LayoutCursor = {
@@ -142,6 +197,18 @@ function buildBoundaryWidths(
   return boundaries
 }
 
+function buildCodeUnitBoundaries(units: string[]) {
+  const boundaries = [0]
+  let total = 0
+
+  for (const unit of units) {
+    total += unit.length
+    boundaries.push(total)
+  }
+
+  return boundaries
+}
+
 function resolveCaretPosition(block: NormalizedBlock, absoluteOffset: number): CaretPosition {
   if (block.runs.length === 0) {
     return { path: block.path, offset: 0 }
@@ -181,28 +248,22 @@ function resolveCaretPosition(block: NormalizedBlock, absoluteOffset: number): C
   }
 }
 
-function buildLineRects(
-  block: NormalizedBlock,
-  blockTop: number,
-  layoutWidth: number,
-  lineHeight: number,
-  font: string,
-  fallbackWidth: number,
-  spacing: InlineSpacing,
-  lineIndex: number,
-  lineText: string,
-  lineStartOffset: number,
-): SelectionGeometryRect[] {
-  const context = createMeasureContext(font)
+function buildLineRects(input: LineRectBuildInput): SelectionGeometryRect[] {
+  const {
+    block,
+    blockTop,
+    layoutWidth,
+    lineHeight,
+    measureContext,
+    fallbackWidth,
+    spacing,
+    lineIndex,
+    lineText,
+    lineStartOffset
+  } = input
   const lineUnits = Array.from(lineText)
-  const boundaries = buildBoundaryWidths(context, lineUnits, fallbackWidth, spacing)
-  const codeUnitBoundaries = [0]
-  let codeUnitTotal = 0
-
-  for (const unit of lineUnits) {
-    codeUnitTotal += unit.length
-    codeUnitBoundaries.push(codeUnitTotal)
-  }
+  const boundaries = buildBoundaryWidths(measureContext, lineUnits, fallbackWidth, spacing)
+  const codeUnitBoundaries = buildCodeUnitBoundaries(lineUnits)
 
   const caretCount = Math.max(1, lineUnits.length + 1)
   const rects: SelectionGeometryRect[] = []
@@ -266,17 +327,14 @@ function getCursorCodeUnitOffset(prepared: PreparedTextWithSegments, end: Layout
   }).text.length
 }
 
-function buildLineRectsFromBoundaries(
-  block: NormalizedBlock,
-  lineIndex: number,
-  lineWidth: number,
-  boundaries: Array<{
-    caretX: number
-    caretOffset: number
-    rectTop: number
-    rectHeight: number
-  }>
-): SelectionGeometryRect[] {
+function buildLineRectsFromBoundaries(input: {
+  block: NormalizedBlock
+  lineIndex: number
+  lineWidth: number
+  boundaries: GeometryBoundary[]
+}): SelectionGeometryRect[] {
+  const { block, lineIndex, lineWidth, boundaries } = input
+
   if (boundaries.length === 0) {
     return [
       {
@@ -330,25 +388,23 @@ function shouldUseRichInline(block: NormalizedBlock, fallbackFont: string) {
   ))
 }
 
-function buildRichInlineRects(
+function prepareRichInlineBlock(
   block: NormalizedBlock,
-  blockTop: number,
   options: GeometryOptions,
-  fallbackWidth: number,
   contextCache: Map<string, CanvasRenderingContext2D | null>
-) {
-  const richItems = block.runs
-    .filter((run) => !run.placeholder)
-    .map((run) => ({
+): RichInlinePreparation {
+  const runs = block.runs.filter((run) => !run.placeholder)
+  const flow = prepareRichInline(
+    runs.map((run) => ({
       text: run.text,
       font: run.font ?? options.font,
       extraWidth: (run.inlineStartInset ?? 0) + (run.inlineEndInset ?? 0)
     }))
+  )
 
-  const flow = prepareRichInline(richItems)
-  const runPrepared = block.runs
-    .filter((run) => !run.placeholder)
-    .map((run) => {
+  return {
+    flow,
+    runs: runs.map((run) => {
       const font = run.font ?? options.font
       const trimmed = trimBoundaryWhitespace(run.text)
 
@@ -365,6 +421,17 @@ function buildRichInlineRects(
         metrics: measureFontBox(getMeasureContext(contextCache, font))
       }
     })
+  }
+}
+
+function buildRichInlineRects(
+  block: NormalizedBlock,
+  blockTop: number,
+  options: GeometryOptions,
+  fallbackWidth: number,
+  contextCache: Map<string, CanvasRenderingContext2D | null>
+) {
+  const prepared = prepareRichInlineBlock(block, options, contextCache)
 
   const rects: SelectionGeometryRect[] = []
   let cursor: Parameters<typeof layoutNextRichInlineLineRange>[2] | undefined
@@ -372,40 +439,21 @@ function buildRichInlineRects(
   let lineTop = blockTop
 
   while (true) {
-    const range = layoutNextRichInlineLineRange(flow, options.blockWidth, cursor)
+    const range = layoutNextRichInlineLineRange(prepared.flow, options.blockWidth, cursor)
     if (range === null) {
       break
     }
 
-    const line = materializeRichInlineLineRange(flow, range)
-    const fragments: Array<{
-      startX: number
-      gapBefore: number
-      boundariesInFragment: number[]
-      codeUnitBoundaries: number[]
-      absoluteStart: number
-      leadingGapWidth: number
-      leadingCaretOffset: number | null
-      textStartInset: number
-      textEndInset: number
-      metrics: {
-        ascent: number
-        descent: number
-      }
-    }> = []
-    const boundaries: Array<{
-      caretX: number
-      caretOffset: number
-      rectTop: number
-      rectHeight: number
-    }> = []
+    const line = materializeRichInlineLineRange(prepared.flow, range)
+    const fragments: RichInlineFragmentGeometry[] = []
+    const boundaries: GeometryBoundary[] = []
     let x = 0
     let lineHeightForLine = block.lineHeight ?? options.lineHeight
     let lineAscent = 0
     let lineDescent = 0
 
     for (const fragment of line.fragments) {
-      const preparedRun = runPrepared[fragment.itemIndex]
+      const preparedRun = prepared.runs[fragment.itemIndex]
       if (preparedRun === undefined) {
         continue
       }
@@ -427,13 +475,7 @@ function buildRichInlineRects(
           wordSpacing: preparedRun.wordSpacing
         }
       )
-      const codeUnitBoundaries = [0]
-      let codeUnitTotal = 0
-
-      for (const unit of units) {
-        codeUnitTotal += unit.length
-        codeUnitBoundaries.push(codeUnitTotal)
-      }
+      const codeUnitBoundaries = buildCodeUnitBoundaries(units)
 
       const fragmentStart = getCursorCodeUnitOffset(preparedRun.prepared, fragment.start)
       const absoluteStart = preparedRun.run.start + preparedRun.leadingTrim + fragmentStart
@@ -454,7 +496,6 @@ function buildRichInlineRects(
         leadingGapWidth: hasLeadingCollapsedGap ? fragment.gapBefore : 0,
         leadingCaretOffset: hasLeadingCollapsedGap ? preparedRun.run.start : null,
         textStartInset: isFirstFragmentForRun ? preparedRun.inlineStartInset : 0,
-        textEndInset: isLastFragmentForRun ? preparedRun.inlineEndInset : 0,
         metrics: preparedRun.metrics
       })
 
@@ -502,12 +543,12 @@ function buildRichInlineRects(
     const actualLineWidth = boundaries[boundaries.length - 1]?.caretX ?? line.width
 
     rects.push(
-      ...buildLineRectsFromBoundaries(
+      ...buildLineRectsFromBoundaries({
         block,
         lineIndex,
-        actualLineWidth,
+        lineWidth: actualLineWidth,
         boundaries
-      )
+      })
     )
 
     cursor = line.end
@@ -557,6 +598,7 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
     }
 
     const blockFont = block.font ?? options.font
+    const blockMeasureContext = getMeasureContext(contextCache, blockFont)
     const prepareKey = `${blockFont}\u0000${block.text}`
     const prepared = preparedByText.get(prepareKey) ?? prepareWithSegments(block.text, blockFont)
     preparedByText.set(prepareKey, prepared)
@@ -590,21 +632,21 @@ export function createSelectionGeometry(model: DocumentModel, options: GeometryO
     for (let lineIndex = 0; lineIndex < layout.lines.length; lineIndex += 1) {
       const line = layout.lines[lineIndex]!
       rects.push(
-        ...buildLineRects(
+        ...buildLineRects({
           block,
           blockTop,
-          options.blockWidth,
-          blockLineHeight,
-          block.font ?? options.font,
+          layoutWidth: options.blockWidth,
+          lineHeight: blockLineHeight,
+          measureContext: blockMeasureContext,
           fallbackWidth,
-          {
+          spacing: {
             letterSpacing: block.letterSpacing,
             wordSpacing: block.wordSpacing
           },
           lineIndex,
-          line.text,
+          lineText: line.text,
           lineStartOffset,
-        )
+        })
       )
       lineStartOffset += line.text.length
     }

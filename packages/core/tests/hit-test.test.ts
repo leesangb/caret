@@ -105,6 +105,26 @@ describe('selection geometry and hit testing', () => {
     expect(hitTest(model, narrowBoxes, { x: 5, y: 30 })?.offset).toBeGreaterThan(0)
   })
 
+  it('preserves plain-text caret geometry when block spacing is applied', () => {
+    installMeasureMock()
+
+    const root = document.createElement('div')
+    root.innerHTML = '<p>A B</p>'
+    const model = createDocumentModel(root)
+
+    ;(model.blocks[0].letterSpacing as number | undefined) = 2
+    ;(model.blocks[0].wordSpacing as number | undefined) = 5
+
+    const boxes = createSelectionGeometry(model, {
+      blockWidth: 200,
+      lineHeight: 20,
+      font: '16px sans-serif'
+    })
+
+    expect(boxes[0]?.rects.map((rect) => rect.caretX)).toEqual([0, 12, 29, 39])
+    expect(hitTest(model, boxes, { x: 24, y: 10 })?.offset).toBe(2)
+  })
+
   it('handles non-BMP text without breaking caret geometry', () => {
     installMeasureMock()
 
